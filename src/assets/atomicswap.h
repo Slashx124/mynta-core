@@ -305,5 +305,204 @@ uint256 GenerateSwapSecret();
 uint256 HashSecret(const std::vector<unsigned char>& secret);
 std::string GetTradingPairKey(const std::string& assetA, const std::string& assetB);
 
+// ============================================================================
+// HTLC Transaction Builders
+// ============================================================================
+
+class CWallet;
+class CReserveKey;
+
+namespace HTLCTransactions {
+
+/**
+ * Result structure for HTLC operations
+ */
+struct HTLCResult {
+    bool success{false};
+    std::string error;
+    uint256 txHash;
+    CHTLC htlc;
+    std::vector<unsigned char> preimage;  // Populated on create/claim
+    
+    HTLCResult() = default;
+    explicit HTLCResult(const std::string& err) : success(false), error(err) {}
+    static HTLCResult Success(const uint256& hash) {
+        HTLCResult r;
+        r.success = true;
+        r.txHash = hash;
+        return r;
+    }
+};
+
+/**
+ * Create an HTLC transaction
+ * 
+ * @param wallet The wallet to use for funding
+ * @param receiverAddress The address that can claim with preimage
+ * @param amount The amount to lock
+ * @param assetName The asset name (empty for MYNTA)
+ * @param timeoutBlocks Number of blocks until refund allowed
+ * @param hashLock The SHA256 hash of the preimage (if empty, generates new secret)
+ * @return HTLCResult with transaction details and preimage (if generated)
+ */
+HTLCResult CreateHTLC(
+    CWallet* wallet,
+    const CTxDestination& receiverAddress,
+    CAmount amount,
+    const std::string& assetName,
+    uint32_t timeoutBlocks,
+    const uint256& hashLock = uint256()
+);
+
+/**
+ * Claim an HTLC by revealing the preimage
+ * 
+ * @param wallet The wallet to use
+ * @param htlcTxHash The transaction hash containing the HTLC
+ * @param htlcOutputIndex The output index of the HTLC
+ * @param preimage The secret preimage that hashes to hashLock
+ * @param destinationAddress Where to send the claimed funds
+ * @return HTLCResult with claim transaction details
+ */
+HTLCResult ClaimHTLC(
+    CWallet* wallet,
+    const uint256& htlcTxHash,
+    int htlcOutputIndex,
+    const std::vector<unsigned char>& preimage,
+    const CTxDestination& destinationAddress
+);
+
+/**
+ * Refund an HTLC after timeout
+ * 
+ * @param wallet The wallet to use
+ * @param htlcTxHash The transaction hash containing the HTLC
+ * @param htlcOutputIndex The output index of the HTLC
+ * @param destinationAddress Where to send the refunded funds
+ * @return HTLCResult with refund transaction details
+ */
+HTLCResult RefundHTLC(
+    CWallet* wallet,
+    const uint256& htlcTxHash,
+    int htlcOutputIndex,
+    const CTxDestination& destinationAddress
+);
+
+/**
+ * Parse an HTLC from a transaction output
+ * 
+ * @param script The scriptPubKey of the output
+ * @param htlc Output HTLC structure
+ * @return true if successfully parsed as HTLC
+ */
+bool ParseHTLCScript(const CScript& script, CHTLC& htlc);
+
+/**
+ * Verify that an HTLC output matches expected parameters
+ * 
+ * @param tx The transaction to verify
+ * @param outputIndex The output index
+ * @param expectedHashLock The expected hash lock
+ * @param expectedAmount The expected amount
+ * @param strError Output error message
+ * @return true if valid
+ */
+bool VerifyHTLCOutput(
+    const CTransaction& tx,
+    int outputIndex,
+    const uint256& expectedHashLock,
+    CAmount expectedAmount,
+    std::string& strError
+);
+
+/**
+ * Get the current timeout status of an HTLC
+ * 
+ * @param htlcTxHash The HTLC transaction hash
+ * @param htlcOutputIndex The output index
+ * @param blocksRemaining Output: blocks until timeout (negative if expired)
+ * @param canClaim Output: true if HTLC can be claimed
+ * @param canRefund Output: true if HTLC can be refunded
+ * @return true if HTLC found and status determined
+ */
+bool GetHTLCStatus(
+    const uint256& htlcTxHash,
+    int htlcOutputIndex,
+    int& blocksRemaining,
+    bool& canClaim,
+    bool& canRefund
+);
+
+} // namespace HTLCTransactions
+
+// ============================================================================
+// Persistent Order Book with Reorg Safety
+// ============================================================================
+
+class CDBWrapper;
+
+/**
+ * CPersistentOrderBook - Persistent, reorg-safe order book storage
+ */
+class CPersistentOrderBook
+{
+private:
+    mutable CCriticalSection cs;
+    std::unique_ptr<CDBWrapper> db;
+    
+    // In-memory cache synchronized with disk
+    std::map<uint256, CAtomicSwapOffer> offers;
+    std::map<std::string, std::set<uint256>> offersByPair;
+    
+    // UTXO tracking for reorg safety
+    // Maps offer hash to the UTXO that locks it
+    std::map<uint256, COutPoint> offerUTXOs;
+    
+    // Height tracking for deterministic pruning
+    int currentHeight{0};
+
+public:
+    explicit CPersistentOrderBook(const std::string& dbPath);
+    ~CPersistentOrderBook();
+    
+    // Initialize/load from disk
+    bool Initialize();
+    
+    // Basic operations
+    bool AddOffer(const CAtomicSwapOffer& offer, const COutPoint& fundingUTXO);
+    bool RemoveOffer(const uint256& offerHash);
+    bool MarkOfferFilled(const uint256& offerHash, const uint256& fillTxHash);
+    bool CancelOffer(const uint256& offerHash);
+    
+    // Lookup
+    bool GetOffer(const uint256& offerHash, CAtomicSwapOffer& offer) const;
+    std::vector<CAtomicSwapOffer> GetOffersForPair(const std::string& assetA, const std::string& assetB) const;
+    std::vector<CAtomicSwapOffer> GetActiveOffers() const;
+    
+    // Block processing (for reorg safety)
+    void ConnectBlock(const CBlock& block, int height);
+    void DisconnectBlock(const CBlock& block, int height);
+    
+    // UTXO monitoring
+    void UTXOSpent(const COutPoint& utxo);
+    bool IsOfferUTXOSpent(const uint256& offerHash) const;
+    
+    // Maintenance
+    void CleanupExpired(int currentHeight);
+    void Flush();
+    
+    // Queries
+    UniValue GetOrderBookJson(const std::string& assetA, const std::string& assetB) const;
+    int GetOfferCount() const;
+    int GetCurrentHeight() const { return currentHeight; }
+};
+
+// Global persistent order book
+extern std::unique_ptr<CPersistentOrderBook> persistentOrderBook;
+
+// Initialize persistent order book
+bool InitPersistentOrderBook(const std::string& datadir);
+void StopPersistentOrderBook();
+
 #endif // MYNTA_ASSETS_ATOMICSWAP_H
 
