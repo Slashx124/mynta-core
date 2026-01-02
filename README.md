@@ -1,104 +1,108 @@
-Raven Core integration/staging tree
-=====================================
+# Mynta Core
 
-https://ravencoin.org
+Mynta Core is the reference implementation of the Mynta blockchain. It provides the full node daemon, consensus logic, and networking stack that power the Mynta network.
 
-To see how to run Ravencoin, please read the respective files in [the doc folder](doc)
+## What is Mynta?
 
+Mynta is an independent, community-driven cryptocurrency focused on transparency, reliability, and long-term sustainability. The project emphasizes correctness over features, reproducibility over convenience, and open development from day one.
 
-What is Ravencoin?
-----------------
+Mynta operates as a decentralized peer-to-peer network with no central authority. Transaction processing, block validation, and consensus are carried out collectively by network participants running Mynta Core.
 
-Ravencoin is an experimental digital currency that enables instant payments to
-anyone, anywhere in the world. The Ravencoin platform also lets anyone create assets (tokens) on the Ravencoin network. 
-Assets can be used for NFTs, STOs, Gift Cards, and fractional ownership of anything of value.
-Ravencoin uses peer-to-peer technology to operate
-with no central authority: managing transactions and issuing money are carried
-out collectively by the network. 
+### Design Principles
 
+- **Clean launch**: No pre-mine, no hidden allocations, no privileged infrastructure
+- **Reproducible builds**: Deterministic compilation ensures binary integrity
+- **Correctness first**: Security and consensus safety take priority over feature velocity
+- **Open development**: All changes are proposed, reviewed, and merged in public
 
+## Features
 
-License
--------
+- **Full node implementation**: Complete blockchain validation and relay
+- **Integrated wallet**: Send, receive, and manage funds directly from the daemon
+- **Asset layer**: Create and transfer user-defined assets on-chain
+- **KawPoW consensus**: ASIC-resistant proof-of-work active from block height 1
+- **Standard RPC interface**: JSON-RPC API for application integration
+- **Cross-platform**: Builds on Linux, macOS, and Windows
 
-Raven Core is released under the terms of the MIT license. See [COPYING](COPYING) for more
-information or see https://opensource.org/licenses/MIT.
+## Getting Started
 
-Development Process
--------------------
+### Prerequisites
 
-The `master` branch is regularly built and tested, but is not guaranteed to be
-completely stable. [Tags](https://github.com/RavenProject/Ravencoin/tags) are created
-regularly to indicate new official, stable release versions of Raven Core.
+Mynta Core requires standard build tools and libraries. See [BUILDING.md](BUILDING.md) for detailed platform-specific instructions.
 
-Active development is done in the `develop` branch. 
+Minimum requirements:
+- C++14 compatible compiler (GCC 7+, Clang 8+, MSVC 2017+)
+- GNU Autotools (autoconf, automake, libtool)
+- Boost 1.64+
+- OpenSSL 1.1+
+- libevent 2.1+
+- Berkeley DB 4.8 (for wallet support)
 
-The contribution workflow is described in [CONTRIBUTING.md](CONTRIBUTING.md).
+### Build
 
-Developer IRC is inactive please join us on discord in #development. https://discord.gg/fndp4NBGct
+```bash
+./autogen.sh
+./configure
+make
+make install  # optional
+```
 
-Testing
--------
+### Run
 
-Testing and code review is the bottleneck for development; we get more pull
-requests than we can review and test on short notice. Please be patient and help out by testing
-other people's pull requests, and remember this is a security-critical project where any mistake might cost people
-lots of money.
+```bash
+# Start the daemon
+myntad
 
-Testnet is up and running and available to use during development.
+# Interact via CLI
+mynta-cli getblockchaininfo
+mynta-cli help
+```
 
-### Automated Testing
+Default data directory:
+- Linux: `~/.mynta`
+- macOS: `~/Library/Application Support/Mynta`
+- Windows: `%APPDATA%\Mynta`
 
-Developers are strongly encouraged to write [unit tests](src/test/README.md) for new code, and to
-submit new unit tests for old code. Unit tests can be compiled and run
-(assuming they weren't disabled in configure) with: `make check`. Further details on running
-and extending unit tests can be found in [/src/test/README.md](/src/test/README.md).
+Default configuration file: `mynta.conf`
 
-There are also [regression and integration tests](/test), written
-in Python, that are run automatically on the build server.
-These tests can be run (if the [test dependencies](/test) are installed) with: `test/functional/test_runner.py`
+### Network Ports
 
+| Network  | P2P Port | RPC Port |
+|----------|----------|----------|
+| Mainnet  | 8770     | 8766     |
+| Testnet  | 18770    | 18766    |
+| Regtest  | 18444    | 18443    |
 
-### Manual Quality Assurance (QA) Testing
+## Documentation
 
-Changes should be tested by somebody other than the developer who wrote the
-code. This is especially important for large or high-risk changes. It is useful
-to add a test plan to the pull request description if testing the changes is
-not straightforward.
+- [BUILDING.md](BUILDING.md) — Build instructions for all platforms
+- [doc/](doc/) — Additional documentation and specifications
+- [contrib/](contrib/) — Helper scripts and configuration examples
 
+## Contributing
 
-About Ravencoin
-----------------
-A digital peer to peer network for the facilitation of asset transfer.
+Contributions are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+- Reporting issues
+- Submitting pull requests
+- Code review expectations
+- Consensus-critical change process
 
+## Testing
 
+```bash
+# Unit tests
+make check
 
-In the fictional world of Westeros, ravens are used as messengers who carry statements of truth. Ravencoin is a use case specific blockchain designed to carry statements of truth about who owns what assets. 
+# Functional tests (requires Python 3)
+test/functional/test_runner.py
+```
 
+See [src/test/README.md](src/test/README.md) for details on the test framework.
 
+## License
 
-Thank you to the Bitcoin developers. 
+Mynta Core is released under the MIT License. See [COPYING](COPYING) for the full license text.
 
-The Ravencoin project is launched based on the hard work and continuous effort of over 400 Bitcoin developers who made over 14,000 commits over the life to date of the Bitcoin project. We are eternally grateful to you for your efforts and diligence in making a secure network and for their support of free and open source software development.  The Ravencoin experiment is made on the foundation you built.
+## Security
 
-
-Abstract
-----------------
-Ravencoin aims to implement a blockchain which is optimized specifically for the use case of transferring assets such as securities from one holder to another. Based on the extensive development and testing of Bitcoin, Ravencoin is built on a fork of the Bitcoin code. Key changes include a faster block reward time and a change in the number, but not weighed distribution schedule, of coins. Ravencoin is free and open source and will be issued and mined transparently with no pre-mine, developer allocation or any other similar set aside. Ravencoin is intended to prioritize user control, privacy and censorship resistance and be jurisdiction agnostic while allowing simple optional additional features for users based on need.
-
-
-
-A blockchain is a ledger showing the value of something and allowing it to be transferred to someone else. Of all the possible uses for blockchains, the reporting of who owns what is one of the core uses of the technology.  This is why the first and most successful use case for blockchain technology to date has been Bitcoin.
-
-The success of the Ethereum ERC 20 token shows the demand for tokenized assets that use another blockchain.  Tokens offer many advantages to traditional shares or other participation mechanisms such as faster transfer, possibly increased user control and censorship resistance and reduction or elimination of the need for trusted third parties.
-
-Bitcoin also has the capability of serving as the rails for tokens by using projects such as Omnilayer, RSK or Counterparty. However, neither Bitcoin nor Ethereum was specifically designed for facilitating ownership of other assets. 
-
-Ravencoin is designed to be a use case specific blockchain designed to efficiently handle one specific function: the transfer of assets from one party to another.
-
-Bitcoin is and always should be focused on its goals of being a better form of money. Bitcoin developers will unlikely prioritize improvements or features which are specifically beneficial to the facilitation of token transfers.  One goal of the Ravencoin project is to see if a use case specific blockchain and development effort can create code which can either improve existing structures like Bitcoin or provide advantages for specific use cases.
-
-In the new global economy, borders and jurisdictions will be less relevant as more assets are tradable and trade across borders is increasingly frictionless. In an age where people can move significant amounts of wealth instantly using Bitcoin, global consumers will likely demand the same efficiency for their securities and similar asset holdings.
-
-For such a global system to work it will need to be independent of regulatory jurisdictions.  This is not due to ideological belief but practicality: if the rails for blockchain asset transfer are not censorship resistance and jurisdiction agnostic, any given jurisdiction may be in conflict with another.  In legacy systems, wealth was generally confined in the jurisdiction of the holder and therefore easy to control based on the policies of that jurisdiction. Because of the global nature of blockchain technology any protocol level ability to control wealth would potentially place jurisdictions in conflict and will not be able to operate fairly.  
-
+If you discover a security vulnerability, please report it responsibly. Do not open a public issue. Contact the maintainers directly or use any published security contact method.
