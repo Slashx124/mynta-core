@@ -1,0 +1,83 @@
+name: Build Mynta Core
+
+on:
+  push:
+    branches: [ master, develop, mynta-rebrand-clean ]
+  pull_request:
+    branches: [ master, develop ]
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          libtool \
+          autotools-dev \
+          automake \
+          pkg-config \
+          bsdmainutils \
+          python3 \
+          libssl-dev \
+          libevent-dev \
+          libboost-system-dev \
+          libboost-filesystem-dev \
+          libboost-chrono-dev \
+          libboost-test-dev \
+          libboost-thread-dev \
+          libboost-program-options-dev \
+          libdb-dev \
+          libdb++-dev \
+          libminiupnpc-dev \
+          libzmq3-dev
+
+    - name: Generate Build System
+      run: ./autogen.sh
+
+    - name: Configure
+      run: |
+        ./configure \
+          --disable-bench \
+          --disable-tests \
+          --with-incompatible-bdb \
+          --without-gui \
+          --disable-man
+
+    - name: Build
+      run: make -j$(nproc)
+
+    - name: Verify Version
+      run: |
+        ./src/myntad --version
+        ./src/mynta-cli --version
+
+    - name: Upload Binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: mynta-linux-x86_64
+        path: |
+          src/myntad
+          src/mynta-cli
+          src/mynta-tx
+
+  build-docker:
+    runs-on: ubuntu-22.04
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Build Docker Image
+      run: docker build -t mynta-core .
+
+    - name: Test Docker Image
+      run: docker run --rm mynta-core --version
+
+

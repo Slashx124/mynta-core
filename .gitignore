@@ -1,0 +1,195 @@
+# ============================================
+# Mynta Core .gitignore
+# Bitcoin-Core derived C++ project
+# ============================================
+
+# === Build Artifacts ===
+/build/
+/depends/built/
+/depends/work/
+/depends/sources/
+/depends/x86_64*/
+/depends/i686*/
+/depends/arm*/
+/depends/aarch64*/
+src/.libs/
+src/*/.libs/
+*.o
+*.a
+*.la
+*.lo
+*.so
+*.so.*
+*.dll
+*.dylib
+*.exe
+*.pdb
+
+# === Autotools Generated Files ===
+Makefile
+Makefile.in
+!Makefile.am
+aclocal.m4
+autom4te.cache/
+compile
+config.guess
+config.log
+config.status
+config.sub
+configure
+configure~
+depcomp
+install-sh
+libtool
+ltmain.sh
+m4/libtool.m4
+m4/lt*.m4
+missing
+stamp-h1
+src/config/bitcoin-config.h
+src/config/mynta-config.h
+src/config/raven-config.h
+*.Po
+*.Plo
+.deps/
+.dirstamp
+
+# === Bitcoin/Mynta Compiled Binaries ===
+src/myntad
+src/mynta-cli
+src/mynta-tx
+src/mynta-wallet
+src/qt/mynta-qt
+src/test/test_mynta
+src/test/test_mynta_*
+src/bench/bench_mynta
+# Legacy names
+src/ravend
+src/raven-cli
+src/raven-tx
+src/qt/raven-qt
+
+# === Runtime Data ===
+*.pid
+*.log
+debug.log
+*.dat
+!src/test/data/*.dat
+*.conf
+!contrib/**/*.conf
+/data/
+.cookie
+
+# === Qt Build Artifacts ===
+*.pro.user
+*.pro.user.*
+moc_*.cpp
+moc_*.h
+moc_predefs.h
+ui_*.h
+qrc_*.cpp
+.qmake.cache
+.qmake.stash
+*.qm
+
+# === Rust / Cargo / Tauri ===
+target/
+**/target/
+**/*.rs.bk
+*.rlib
+Cargo.lock
+!src-tauri/Cargo.lock
+
+# === Node.js / npm ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+dist/
+.pnpm-store/
+
+# === Python ===
+*.py[cod]
+__pycache__/
+*.so
+.Python
+venv/
+.venv/
+
+# === Docker ===
+*.tar
+*.img
+.docker/
+
+# === Coverage & Testing ===
+coverage/
+.nyc_output/
+*.gcda
+*.gcno
+*.gcov
+lcov-baseline.info
+total_coverage.info
+
+# === Documentation Build ===
+doc/doxygen/
+doc/man/*.1
+
+# === IDE & Editor ===
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+.project
+.cproject
+.settings/
+*.kate-swp
+.kdev4/
+*.kdev4
+
+# === OS Generated ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# === Package Files ===
+*.deb
+*.rpm
+*.dmg
+*.msi
+*.AppImage
+*.snap
+
+# === Misc ===
+*.patch
+*.diff
+.vagrant/
+*.box
+contrib/gitian-builder/
+*.cache
+.ccache/
+
+# === Generated pkg-config ===
+*.pc
+!*.pc.in
+
+# === Backup files ===
+**/configure~
+**/*.bak
+**/*~
+
+# === Additional exclusions ===
+db-4.8.30.NC.tar.gz
+db-*.tar.gz
+test/cache/
+/binaries/
