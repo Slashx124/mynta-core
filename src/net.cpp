@@ -1514,7 +1514,7 @@ void ThreadMapPort()
             }
         }
 
-        std::string strDesc = "Raven " + FormatFullVersion();
+        std::string strDesc = "Mynta " + FormatFullVersion();
 
         try {
             while (true) {
