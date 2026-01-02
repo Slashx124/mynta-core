@@ -252,7 +252,8 @@ obj/build.h: FORCE
 libmynta_util_a-clientversion.$(OBJEXT): obj/build.h
 
 # server: shared between ravend and mynta-qt
-libmynta_server_a_CPPFLAGS = $(AM_CPPFLAGS) $(MYNTA_INCLUDES) $(MINIUPNPC_CPPFLAGS) $(EVENT_CFLAGS) $(EVENT_PTHREADS_CFLAGS)
+BLST_CPPFLAGS = -I$(top_srcdir)/src/bls
+libmynta_server_a_CPPFLAGS = $(AM_CPPFLAGS) $(MYNTA_INCLUDES) $(BLST_CPPFLAGS) $(MINIUPNPC_CPPFLAGS) $(EVENT_CFLAGS) $(EVENT_PTHREADS_CFLAGS)
 libmynta_server_a_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 libmynta_server_a_SOURCES = \
   addrdb.cpp \
@@ -519,6 +520,7 @@ myntad_LDADD = \
   $(LIBSECP256K1)
 
 myntad_LDADD += $(BOOST_LIBS) $(BDB_LIBS) $(SSL_LIBS) $(CRYPTO_LIBS) $(MINIUPNPC_LIBS) $(EVENT_PTHREADS_LIBS) $(EVENT_LIBS) $(ZMQ_LIBS)
+myntad_LDADD += $(top_srcdir)/src/bls/blst/libblst.a
 
 # raven-cli binary #
 mynta_cli_SOURCES = mynta-cli.cpp
