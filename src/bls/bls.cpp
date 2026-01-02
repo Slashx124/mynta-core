@@ -5,7 +5,9 @@
 #include "bls/bls.h"
 #include "crypto/sha256.h"
 #include "hash.h"
+#include "pubkey.h"
 #include "random.h"
+#include "support/cleanse.h"
 #include "util.h"
 #include "utilstrencodings.h"
 
@@ -77,7 +79,7 @@ CBLSSecretKey::CBLSSecretKey()
 CBLSSecretKey::~CBLSSecretKey()
 {
     // Secure erase
-    OPENSSL_cleanse(data.data(), BLS_SECRET_KEY_SIZE);
+    memory_cleanse(data.data(), BLS_SECRET_KEY_SIZE);
     fValid = false;
 }
 
@@ -91,7 +93,7 @@ CBLSSecretKey::CBLSSecretKey(CBLSSecretKey&& other) noexcept
 CBLSSecretKey& CBLSSecretKey::operator=(CBLSSecretKey&& other) noexcept
 {
     if (this != &other) {
-        OPENSSL_cleanse(data.data(), BLS_SECRET_KEY_SIZE);
+        memory_cleanse(data.data(), BLS_SECRET_KEY_SIZE);
         data = std::move(other.data);
         fValid = other.fValid;
         other.SetNull();
@@ -140,7 +142,7 @@ bool CBLSSecretKey::SetSecretKeyFromSeed(const uint256& seed)
 
 void CBLSSecretKey::SetNull()
 {
-    OPENSSL_cleanse(data.data(), BLS_SECRET_KEY_SIZE);
+    memory_cleanse(data.data(), BLS_SECRET_KEY_SIZE);
     fValid = false;
 }
 

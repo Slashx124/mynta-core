@@ -35,7 +35,7 @@ uint256 CChainLockSig::GetHash() const
 uint256 CChainLockSig::GetSignHash() const
 {
     CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
-    hw << CHAINLOCK_QUORUM_TYPE;
+    hw << static_cast<uint8_t>(CHAINLOCK_QUORUM_TYPE);
     hw << GetRequestId();
     hw << blockHash;
     return hw.GetHash();
@@ -280,7 +280,8 @@ bool CChainLocksManager::ProcessChainLock(const CChainLockSig& clsig, CValidatio
     
     // Verify block exists in our chain
     LOCK(cs_main);
-    const CBlockIndex* pindex = LookupBlockIndex(clsig.blockHash);
+    BlockMap::iterator it = mapBlockIndex.find(clsig.blockHash);
+    const CBlockIndex* pindex = (it != mapBlockIndex.end()) ? it->second : nullptr;
     if (!pindex) {
         LogPrintf("CChainLocksManager::%s -- Block not found: %s\n",
                   __func__, clsig.blockHash.ToString().substr(0, 16));
@@ -432,7 +433,8 @@ void CChainLocksManager::UpdatedBlockTip(const CBlockIndex* pindex)
     // Process any pending ChainLocks for blocks we now have
     for (auto it = pendingChainLocks.begin(); it != pendingChainLocks.end(); ) {
         LOCK(cs_main);
-        const CBlockIndex* blockIndex = LookupBlockIndex(it->second.blockHash);
+        BlockMap::iterator blockIt = mapBlockIndex.find(it->second.blockHash);
+        const CBlockIndex* blockIndex = (blockIt != mapBlockIndex.end()) ? blockIt->second : nullptr;
         if (blockIndex && blockIndex->nHeight == it->second.nHeight) {
             CValidationState state;
             ProcessChainLock(it->second, state);

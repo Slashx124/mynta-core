@@ -8,9 +8,16 @@
 #include "amount.h"
 #include "primitives/transaction.h"
 #include "script/script.h"
+#include "script/standard.h"
 #include "serialize.h"
+#include "sync.h"
 #include "uint256.h"
 
+#include <univalue.h>
+
+#include <map>
+#include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -29,6 +36,12 @@
  * - Time lock: Refund possible after timeout
  * - Dual signatures: Both parties can verify
  */
+
+// Forward declarations
+class CBlock;
+class CDBWrapper;
+class CReserveKey;
+class CWallet;
 
 // HTLC script type identifiers
 enum class HTLCType : uint8_t {

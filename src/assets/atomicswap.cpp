@@ -4,6 +4,8 @@
 
 #include "assets/atomicswap.h"
 #include "hash.h"
+#include "key.h"
+#include "pubkey.h"
 #include "random.h"
 #include "script/script.h"
 #include "script/standard.h"
@@ -407,7 +409,7 @@ UniValue CAtomicSwapOrderBook::GetOrderBookJson(
         offerJson.pushKV("takerAmount", offer.takerAmount);
         offerJson.pushKV("rate", offer.GetRate());
         offerJson.pushKV("createdHeight", offer.createdHeight);
-        offerJson.pushKV("expiresHeight", offer.createdHeight + offer.timeoutBlocks);
+        offerJson.pushKV("expiresHeight", static_cast<int64_t>(offer.createdHeight) + offer.timeoutBlocks);
         
         // Determine if this is a bid or ask relative to assetA
         if (offer.makerAssetName == assetA || 
@@ -520,14 +522,18 @@ std::string GetTradingPairKey(const std::string& assetA, const std::string& asse
 // ============================================================================
 
 #include "base58.h"
+#include "chainparams.h"
 #include "coins.h"
 #include "consensus/validation.h"
 #include "key.h"
+#include "net.h"
+#include "policy/fees.h"
 #include "policy/policy.h"
 #include "primitives/transaction.h"
 #include "script/sign.h"
 #include "txmempool.h"
 #include "validation.h"
+#include "wallet/coincontrol.h"
 #include "wallet/wallet.h"
 
 namespace HTLCTransactions {
@@ -609,8 +615,9 @@ HTLCResult CreateHTLC(
     int nChangePosRet = -1;
     CReserveKey reservekey(wallet);
     CWalletTx wtx;
+    CCoinControl coinControl;  // Default coin control (no specific coin selection)
     
-    if (!wallet->CreateTransaction(vecSend, wtx, reservekey, nFeeRequired, nChangePosRet, strError)) {
+    if (!wallet->CreateTransaction(vecSend, wtx, reservekey, nFeeRequired, nChangePosRet, strError, coinControl)) {
         return HTLCResult("Failed to create transaction: " + strError);
     }
     
@@ -659,7 +666,7 @@ HTLCResult ClaimHTLC(
     // Find the HTLC output
     CTransactionRef htlcTx;
     uint256 hashBlock;
-    if (!GetTransaction(htlcTxHash, htlcTx, Params().GetConsensus(), hashBlock, true)) {
+    if (!GetTransaction(htlcTxHash, htlcTx, GetParams().GetConsensus(), hashBlock, true)) {
         return HTLCResult("HTLC transaction not found");
     }
     
@@ -695,7 +702,7 @@ HTLCResult ClaimHTLC(
     mtx.vin.push_back(CTxIn(COutPoint(htlcTxHash, htlcOutputIndex)));
     
     // Calculate fee
-    CAmount fee = GetMinRelayFee(3000, false); // Estimate 3KB
+    CAmount fee = minRelayTxFee.GetFee(3000); // Estimate 3KB
     CAmount claimAmount = htlcOutput.nValue - fee;
     
     if (claimAmount <= 0) {
@@ -735,12 +742,18 @@ HTLCResult ClaimHTLC(
     CTransactionRef finalTx = MakeTransactionRef(std::move(mtx));
     
     CValidationState state;
-    if (!AcceptToMemoryPool(mempool, state, finalTx, nullptr, nullptr, false, DEFAULT_MAX_RAW_TX_FEE_RATE.GetFeePerK())) {
+    bool fMissingInputs = false;
+    if (!AcceptToMemoryPool(mempool, state, finalTx, &fMissingInputs, nullptr, false, 0)) {
         return HTLCResult("Transaction rejected: " + state.GetRejectReason());
     }
     
     // Relay
-    RelayTransaction(*finalTx, g_connman.get());
+    if (g_connman) {
+        CInv inv(MSG_TX, finalTx->GetHash());
+        g_connman->ForEachNode([&inv](CNode* pnode) {
+            pnode->PushInventory(inv);
+        });
+    }
     
     HTLCResult result = HTLCResult::Success(finalTx->GetHash());
     result.preimage = preimage;
@@ -766,7 +779,7 @@ HTLCResult RefundHTLC(
     // Find the HTLC output
     CTransactionRef htlcTx;
     uint256 hashBlock;
-    if (!GetTransaction(htlcTxHash, htlcTx, Params().GetConsensus(), hashBlock, true)) {
+    if (!GetTransaction(htlcTxHash, htlcTx, GetParams().GetConsensus(), hashBlock, true)) {
         return HTLCResult("HTLC transaction not found");
     }
     
@@ -806,7 +819,7 @@ HTLCResult RefundHTLC(
     mtx.vin.push_back(txin);
     
     // Calculate fee
-    CAmount fee = GetMinRelayFee(2000, false);
+    CAmount fee = minRelayTxFee.GetFee(2000);
     CAmount refundAmount = htlcOutput.nValue - fee;
     
     if (refundAmount <= 0) {
@@ -839,12 +852,18 @@ HTLCResult RefundHTLC(
     CTransactionRef finalTx = MakeTransactionRef(std::move(mtx));
     
     CValidationState state;
-    if (!AcceptToMemoryPool(mempool, state, finalTx, nullptr, nullptr, false, DEFAULT_MAX_RAW_TX_FEE_RATE.GetFeePerK())) {
+    bool fMissingInputs = false;
+    if (!AcceptToMemoryPool(mempool, state, finalTx, &fMissingInputs, nullptr, false, 0)) {
         return HTLCResult("Transaction rejected: " + state.GetRejectReason());
     }
     
     // Relay
-    RelayTransaction(*finalTx, g_connman.get());
+    if (g_connman) {
+        CInv inv(MSG_TX, finalTx->GetHash());
+        g_connman->ForEachNode([&inv](CNode* pnode) {
+            pnode->PushInventory(inv);
+        });
+    }
     
     HTLCResult result = HTLCResult::Success(finalTx->GetHash());
     
@@ -925,7 +944,7 @@ bool GetHTLCStatus(
     // Find the HTLC transaction
     CTransactionRef htlcTx;
     uint256 hashBlock;
-    if (!GetTransaction(htlcTxHash, htlcTx, Params().GetConsensus(), hashBlock, true)) {
+    if (!GetTransaction(htlcTxHash, htlcTx, GetParams().GetConsensus(), hashBlock, true)) {
         return false;
     }
     
@@ -953,9 +972,9 @@ bool GetHTLCStatus(
     // Get block height where HTLC was created
     int htlcHeight = 0;
     if (!hashBlock.IsNull()) {
-        CBlockIndex* pindex = LookupBlockIndex(hashBlock);
-        if (pindex) {
-            htlcHeight = pindex->nHeight;
+        BlockMap::iterator it = mapBlockIndex.find(hashBlock);
+        if (it != mapBlockIndex.end()) {
+            htlcHeight = it->second->nHeight;
         }
     }
     
@@ -1007,42 +1026,30 @@ bool CPersistentOrderBook::Initialize()
     std::unique_ptr<CDBIterator> iter(db->NewIterator());
     
     for (iter->Seek(DB_OFFER); iter->Valid(); iter->Next()) {
-        char prefix;
-        uint256 hash;
+        std::pair<char, uint256> key;
+        if (!iter->GetKey(key)) break;
         
-        CDataStream keyStream(SER_DISK, CLIENT_VERSION);
-        keyStream.write(iter->GetKey().data(), iter->GetKey().size());
-        keyStream >> prefix;
-        
-        if (prefix != DB_OFFER) break;
-        
-        keyStream >> hash;
+        if (key.first != DB_OFFER) break;
         
         CAtomicSwapOffer offer;
         if (iter->GetValue(offer)) {
-            offers[hash] = offer;
+            offers[key.second] = offer;
             
             std::string pairKey = GetTradingPairKey(offer.makerAssetName, offer.takerAssetName);
-            offersByPair[pairKey].insert(hash);
+            offersByPair[pairKey].insert(key.second);
         }
     }
     
     // Load UTXO mappings
     for (iter->Seek(DB_UTXO); iter->Valid(); iter->Next()) {
-        char prefix;
-        uint256 offerHash;
+        std::pair<char, uint256> key;
+        if (!iter->GetKey(key)) break;
         
-        CDataStream keyStream(SER_DISK, CLIENT_VERSION);
-        keyStream.write(iter->GetKey().data(), iter->GetKey().size());
-        keyStream >> prefix;
-        
-        if (prefix != DB_UTXO) break;
-        
-        keyStream >> offerHash;
+        if (key.first != DB_UTXO) break;
         
         COutPoint utxo;
         if (iter->GetValue(utxo)) {
-            offerUTXOs[offerHash] = utxo;
+            offerUTXOs[key.second] = utxo;
         }
     }
     
@@ -1300,7 +1307,7 @@ UniValue CPersistentOrderBook::GetOrderBookJson(
         offerJson.pushKV("takerAmount", offer.takerAmount);
         offerJson.pushKV("rate", offer.GetRate());
         offerJson.pushKV("createdHeight", offer.createdHeight);
-        offerJson.pushKV("expiresHeight", offer.createdHeight + offer.timeoutBlocks);
+        offerJson.pushKV("expiresHeight", static_cast<int64_t>(offer.createdHeight) + offer.timeoutBlocks);
         
         if (offer.makerAssetName == assetA ||
             (offer.makerAssetName.empty() && assetA.empty())) {

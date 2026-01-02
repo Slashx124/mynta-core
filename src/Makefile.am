@@ -282,10 +282,10 @@ libmynta_server_a_SOURCES = \
   assets/assetsnapshotdb.cpp \
   assets/rewards.cpp \
   assets/atomicswap.cpp \
-  bls/bls.cpp \
   evo/evodb.cpp \
   evo/providertx.cpp \
   evo/deterministicmns.cpp \
+  bls/bls.cpp \
   llmq/quorums.cpp \
   llmq/instantsend.cpp \
   llmq/chainlocks.cpp \

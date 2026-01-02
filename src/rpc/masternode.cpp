@@ -8,10 +8,12 @@
 #include "core_io.h"
 #include "evo/deterministicmns.h"
 #include "evo/providertx.h"
+#include "evo/specialtx.h"
 #include "init.h"
 #include "net.h"
 #include "netbase.h"
 #include "rpc/server.h"
+#include "script/sign.h"
 #include "script/standard.h"
 #include "util.h"
 #include "validation.h"
@@ -388,6 +390,7 @@ UniValue protx_register(const JSONRPCRequest& request)
     SetTxPayload(tx, proTx);
 
     // Sign the transaction inputs
+    CTransaction txConst(tx);  // Create immutable version for signing
     int nIn = 0;
     for (const auto& input : tx.vin) {
         const CWalletTx* wtx = pwallet->GetWalletTx(input.prevout.hash);
@@ -396,7 +399,7 @@ UniValue protx_register(const JSONRPCRequest& request)
         }
         
         SignatureData sigdata;
-        if (!ProduceSignature(TransactionSignatureCreator(pwallet, &tx, nIn, 
+        if (!ProduceSignature(TransactionSignatureCreator(pwallet, &txConst, nIn, 
                               wtx->tx->vout[input.prevout.n].nValue, SIGHASH_ALL),
                               wtx->tx->vout[input.prevout.n].scriptPubKey, sigdata)) {
             throw JSONRPCError(RPC_WALLET_ERROR, "Failed to sign transaction input");
@@ -577,10 +580,10 @@ UniValue protx(const JSONRPCRequest& request)
 // Register RPC commands
 static const CRPCCommand commands[] =
 {
-    //  category              name                  actor (function)     okSafe argNames
-    //  --------------------- --------------------- -------------------- ------ --------
-    { "masternode",          "masternode",         &masternode,         true,  {} },
-    { "masternode",          "protx",              &protx,              true,  {} },
+    //  category              name                  actor (function)     argNames
+    //  --------------------- --------------------- -------------------- --------
+    { "masternode",          "masternode",         &masternode,         {} },
+    { "masternode",          "protx",              &protx,              {} },
 };
 
 void RegisterMasternodeRPCCommands(CRPCTable& t)

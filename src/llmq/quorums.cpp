@@ -152,7 +152,7 @@ uint256 CRecoveredSig::GetHash() const
 uint256 CRecoveredSig::BuildSignHash() const
 {
     CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
-    hw << llmqType;
+    hw << static_cast<uint8_t>(llmqType);
     hw << quorumHash;
     hw << id;
     hw << msgHash;
@@ -200,7 +200,7 @@ CQuorumCPtr CQuorumManager::BuildQuorum(LLMQType type, const CBlockIndex* pindex
     // Calculate quorum hash (deterministic from block hash and type)
     CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
     hw << std::string("LLMQ_QUORUM");
-    hw << type;
+    hw << static_cast<uint8_t>(type);
     hw << pindex->GetBlockHash();
     uint256 quorumHash = hw.GetHash();
     
@@ -394,7 +394,7 @@ std::vector<CDeterministicMNCPtr> CQuorumManager::SelectQuorumMembers(
     // Calculate quorum modifier
     CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
     hw << std::string("LLMQ_MODIFIER");
-    hw << type;
+    hw << static_cast<uint8_t>(type);
     hw << pindex->GetBlockHash();
     uint256 quorumModifier = hw.GetHash();
     
@@ -463,7 +463,7 @@ bool CSigningManager::AsyncSign(LLMQType type, const uint256& id, const uint256&
     
     // Build sign hash
     CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
-    hw << type;
+    hw << static_cast<uint8_t>(type);
     hw << quorum->quorumHash;
     hw << id;
     hw << msgHash;
@@ -477,7 +477,7 @@ bool CSigningManager::AsyncSign(LLMQType type, const uint256& id, const uint256&
     }
     
     // Store our share
-    sigShares[id][quorumManager.myProTxHash] = sigShare;
+    sigShares[id][quorumManager.GetMyProTxHash()] = sigShare;
     
     LogPrintf("CSigningManager::%s -- Created sig share for %s\n", 
               __func__, id.ToString().substr(0, 16));

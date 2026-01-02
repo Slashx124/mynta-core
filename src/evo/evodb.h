@@ -20,7 +20,7 @@
 class CEvoDB
 {
 private:
-    CCriticalSection cs;
+    mutable CCriticalSection cs;
     CDBWrapper db;
 
     // Current active transaction for atomic operations

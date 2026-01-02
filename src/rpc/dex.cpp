@@ -163,7 +163,7 @@ UniValue dex_createoffer(const JSONRPCRequest& request)
     result.pushKV("sellAmount", ValueFromAmount(sellAmount));
     result.pushKV("buyAsset", buyAsset.empty() ? "MYNTA" : buyAsset);
     result.pushKV("buyAmount", ValueFromAmount(buyAmount));
-    result.pushKV("expiresHeight", offer.createdHeight + timeoutBlocks);
+    result.pushKV("expiresHeight", static_cast<int64_t>(offer.createdHeight) + timeoutBlocks);
     
     return result;
 #else
@@ -484,10 +484,10 @@ UniValue htlc(const JSONRPCRequest& request)
 
 static const CRPCCommand commands[] =
 {
-    //  category              name        actor (function)     okSafe argNames
-    //  --------------------- ----------- -------------------- ------ --------
-    { "dex",                 "dex",       &dex,                true,  {} },
-    { "dex",                 "htlc",      &htlc,               true,  {} },
+    //  category              name        actor (function)     argNames
+    //  --------------------- ----------- -------------------- --------
+    { "dex",                 "dex",       &dex,                {} },
+    { "dex",                 "htlc",      &htlc,               {} },
 };
 
 void RegisterDexRPCCommands(CRPCTable& t)

@@ -47,7 +47,7 @@ uint256 CInstantSendLock::GetRequestId() const
 uint256 CInstantSendLock::GetSignHash() const
 {
     CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
-    hw << INSTANTSEND_QUORUM_TYPE;
+    hw << static_cast<uint8_t>(INSTANTSEND_QUORUM_TYPE);
     hw << quorumHash;
     hw << GetRequestId();
     hw << txid;

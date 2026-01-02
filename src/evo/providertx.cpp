@@ -5,6 +5,7 @@
 #include "evo/providertx.h"
 #include "evo/deterministicmns.h"
 #include "evo/evodb.h"
+#include "evo/specialtx.h"
 
 #include "base58.h"
 #include "chain.h"

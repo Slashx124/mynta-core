@@ -8,6 +8,7 @@
 #include "arith_uint256.h"
 #include "evo/evodb.h"
 #include "netaddress.h"
+#include "primitives/transaction.h"
 #include "pubkey.h"
 #include "script/script.h"
 #include "serialize.h"
@@ -104,6 +105,14 @@ public:
     // Internal management
     uint64_t internalId{std::numeric_limits<uint64_t>::max()};
 
+    // Constructors
+    CDeterministicMN() = default;
+    
+    template <typename Stream>
+    CDeterministicMN(deserialize_type, Stream& s) {
+        Unserialize(s);
+    }
+
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
@@ -170,6 +179,9 @@ public:
     int GetHeight() const { return nHeight; }
     size_t GetAllMNsCount() const { return mnMap.size(); }
     size_t GetValidMNsCount() const;
+    uint64_t GetTotalRegisteredCount() const { return nTotalRegisteredCount; }
+    void IncrementTotalRegisteredCount() { nTotalRegisteredCount++; }
+    const MnMap& GetMnMap() const { return mnMap; }
 
     // Lookup functions
     CDeterministicMNCPtr GetMN(const uint256& proTxHash) const;

@@ -15,6 +15,10 @@
 #include <vector>
 #include <string>
 
+// Forward declarations
+class CBlock;
+class CBlockIndex;
+
 /**
  * Special transaction types for deterministic masternodes
  * Based on Dash DIP-0002 / DIP-0003

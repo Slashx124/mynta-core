@@ -5,6 +5,7 @@
 #include "evo/deterministicmns.h"
 #include "evo/providertx.h"
 #include "evo/evodb.h"
+#include "evo/specialtx.h"
 
 #include "base58.h"
 #include "chain.h"
@@ -316,7 +317,7 @@ bool CDeterministicMNManager::ProcessBlock(const CBlock& block, const CBlockInde
     newList = CDeterministicMNList(pindex->GetBlockHash(), pindex->nHeight);
     
     // Copy existing masternodes
-    for (const auto& pair : prevList->mnMap) {
+    for (const auto& pair : prevList->GetMnMap()) {
         newList = newList.AddMN(pair.second);
     }
 
@@ -348,7 +349,8 @@ bool CDeterministicMNManager::ProcessBlock(const CBlock& block, const CBlockInde
                 newMN->state.keyIDVoting = proTx.keyIDVoting;
                 newMN->state.addr = proTx.addr;
                 newMN->state.scriptPayout = proTx.scriptPayout;
-                newMN->internalId = newList.nTotalRegisteredCount;
+                newMN->internalId = newList.GetTotalRegisteredCount();
+                newList.IncrementTotalRegisteredCount();
 
                 newList = newList.AddMN(newMN);
                 

@@ -5,6 +5,7 @@
 #ifndef MYNTA_BLS_BLS_H
 #define MYNTA_BLS_BLS_H
 
+#include "pubkey.h"
 #include "serialize.h"
 #include "uint256.h"
 #include "hash.h"

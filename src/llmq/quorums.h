@@ -184,7 +184,11 @@ public:
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action)
     {
-        READWRITE(llmqType);
+        uint8_t typeVal = static_cast<uint8_t>(llmqType);
+        READWRITE(typeVal);
+        if (ser_action.ForRead()) {
+            llmqType = static_cast<LLMQType>(typeVal);
+        }
         READWRITE(quorumHash);
         READWRITE(id);
         READWRITE(msgHash);
@@ -216,6 +220,9 @@ public:
     
     // Set our identity
     void SetMyProTxHash(const uint256& _proTxHash);
+    
+    // Get our identity
+    const uint256& GetMyProTxHash() const { return myProTxHash; }
     
     // Build quorum for a given height
     CQuorumCPtr BuildQuorum(LLMQType type, const CBlockIndex* pindex);
