@@ -204,6 +204,14 @@ inline void UnserializeTransaction(TxType& tx, Stream& s) {
     const bool fAllowWitness = !(s.GetVersion() & SERIALIZE_TRANSACTION_NO_WITNESS);
 
     s >> tx.nVersion;
+    
+    // For version 3+ transactions, extract type from upper 16 bits
+    tx.nType = 0;
+    if (tx.nVersion >= 3) {
+        tx.nType = (tx.nVersion >> 16) & 0xFFFF;
+        tx.nVersion = tx.nVersion & 0xFFFF;
+    }
+    
     unsigned char flags = 0;
     tx.vin.clear();
     tx.vout.clear();
@@ -232,13 +240,26 @@ inline void UnserializeTransaction(TxType& tx, Stream& s) {
         throw std::ios_base::failure("Unknown transaction optional data");
     }
     s >> tx.nLockTime;
+    
+    // Read extra payload for special transactions
+    if (tx.nVersion >= 3 && tx.nType != 0) {
+        s >> tx.vExtraPayload;
+    } else {
+        tx.vExtraPayload.clear();
+    }
 }
 
 template<typename Stream, typename TxType>
 inline void SerializeTransaction(const TxType& tx, Stream& s) {
     const bool fAllowWitness = !(s.GetVersion() & SERIALIZE_TRANSACTION_NO_WITNESS);
 
-    s << tx.nVersion;
+    // For version 3+ transactions, encode type in upper 16 bits of version
+    int32_t nVersionToSerialize = tx.nVersion;
+    if (tx.nVersion >= 3 && tx.nType != 0) {
+        nVersionToSerialize |= (static_cast<int32_t>(tx.nType) << 16);
+    }
+    s << nVersionToSerialize;
+    
     unsigned char flags = 0;
     // Consistency check
     if (fAllowWitness) {
@@ -261,6 +282,11 @@ inline void SerializeTransaction(const TxType& tx, Stream& s) {
         }
     }
     s << tx.nLockTime;
+    
+    // Write extra payload for special transactions
+    if (tx.nVersion >= 3 && tx.nType != 0) {
+        s << tx.vExtraPayload;
+    }
 }
 
 
@@ -287,7 +313,9 @@ public:
     const std::vector<CTxIn> vin;
     const std::vector<CTxOut> vout;
     const int32_t nVersion;
+    const uint16_t nType;  // Special transaction type (0 = normal)
     const uint32_t nLockTime;
+    const std::vector<unsigned char> vExtraPayload;  // Extra payload for special transactions
 
 private:
     /** Memory only. */
@@ -391,7 +419,9 @@ struct CMutableTransaction
     std::vector<CTxIn> vin;
     std::vector<CTxOut> vout;
     int32_t nVersion;
+    uint16_t nType{0};  // Special transaction type (0 = normal)
     uint32_t nLockTime;
+    std::vector<unsigned char> vExtraPayload;  // Extra payload for special transactions
 
     CMutableTransaction();
     CMutableTransaction(const CTransaction& tx);
