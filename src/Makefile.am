@@ -137,6 +137,15 @@ MYNTA_CORE_H = \
   assets/snapshotrequestdb.h \
   assets/assetsnapshotdb.h \
   assets/rewards.h \
+  assets/atomicswap.h \
+  bls/bls.h \
+  evo/evodb.h \
+  evo/providertx.h \
+  evo/deterministicmns.h \
+  evo/specialtx.h \
+  llmq/quorums.h \
+  llmq/instantsend.h \
+  llmq/chainlocks.h \
   base58.h \
   bloom.h \
   blockencodings.h \
@@ -272,6 +281,14 @@ libmynta_server_a_SOURCES = \
   assets/snapshotrequestdb.cpp \
   assets/assetsnapshotdb.cpp \
   assets/rewards.cpp \
+  assets/atomicswap.cpp \
+  bls/bls.cpp \
+  evo/evodb.cpp \
+  evo/providertx.cpp \
+  evo/deterministicmns.cpp \
+  llmq/quorums.cpp \
+  llmq/instantsend.cpp \
+  llmq/chainlocks.cpp \
   policy/fees.cpp \
   policy/policy.cpp \
   policy/rbf.cpp \
@@ -287,6 +304,8 @@ libmynta_server_a_SOURCES = \
   rpc/rewards.cpp \
   rpc/safemode.cpp \
   rpc/server.cpp \
+  rpc/masternode.cpp \
+  rpc/dex.cpp \
   script/sigcache.cpp \
   script/ismine.cpp \
   timedata.cpp \

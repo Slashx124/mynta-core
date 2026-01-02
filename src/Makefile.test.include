@@ -98,6 +98,9 @@ RAVEN_TESTS =\
   test/txvalidationcache_tests.cpp \
   test/versionbits_tests.cpp \
   test/uint256_tests.cpp \
+  test/bls_tests.cpp \
+  test/llmq_tests.cpp \
+  test/htlc_orderbook_tests.cpp \
   test/univalue_tests.cpp \
   test/util_tests.cpp
 
