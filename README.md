@@ -17,12 +17,53 @@ Mynta operates as a decentralized peer-to-peer network with no central authority
 
 ## Features
 
-- **Full node implementation**: Complete blockchain validation and relay
-- **Integrated wallet**: Send, receive, and manage funds directly from the daemon
-- **Asset layer**: Create and transfer user-defined assets on-chain
-- **KawPoW consensus**: ASIC-resistant proof-of-work active from block height 1
-- **Standard RPC interface**: JSON-RPC API for application integration
-- **Cross-platform**: Builds on Linux, macOS, and Windows
+### Native Asset Platform
+
+Create, manage, and transfer custom assets directly on the blockchain without smart contracts:
+
+- **Root Assets**: Primary named assets with administrative control
+- **Sub-Assets**: Hierarchical child assets under a root asset (e.g., `COMPANY/PRODUCT`)
+- **Unique Assets**: Non-fungible tokens (NFTs) representing one-of-a-kind items
+- **Reissuable Assets**: Increase supply of existing assets when permitted
+- **Owner Tokens**: Administrative tokens granting asset management rights
+- **Qualifier Assets**: Tags for address-level compliance and verification
+- **Restricted Assets**: Compliance-controlled assets with transfer restrictions
+
+### On-Chain Messaging
+
+Communicate directly through the blockchain:
+
+- **Asset-Based Channels**: Send messages to all holders of a specific asset
+- **Message Subscriptions**: Subscribe to channels and receive on-chain notifications
+- **IPFS Integration**: Attach decentralized content via IPFS hashes
+- **Expiring Messages**: Optional time-based message expiration
+
+### Dividend Distribution
+
+Distribute rewards to asset holders programmatically:
+
+- **Snapshot Scheduling**: Schedule holder snapshots at future block heights
+- **Automated Distribution**: Distribute MYNTA or other assets to all holders
+- **Proportional Payouts**: Rewards calculated based on ownership percentage
+
+### Mining
+
+- **KawPoW Algorithm**: ASIC-resistant proof-of-work active from block height 1
+- **GPU-Friendly**: Designed for commodity hardware mining
+- **Dark Gravity Wave**: Responsive difficulty adjustment per block
+
+### Full Node Implementation
+
+- **Complete Validation**: Full blockchain verification and relay
+- **Integrated Wallet**: Send, receive, and manage funds directly
+- **Standard RPC Interface**: JSON-RPC API for application integration
+- **Transaction Indexing**: Optional address and asset indexing for queries
+
+### Cross-Platform Support
+
+- Builds on Linux, macOS, and Windows
+- Qt-based graphical interface available
+- Headless daemon for server deployments
 
 ## Getting Started
 
@@ -72,6 +113,22 @@ Default configuration file: `mynta.conf`
 | Mainnet  | 8770     | 8766     |
 | Testnet  | 18770    | 18766    |
 | Regtest  | 18444    | 18443    |
+
+## RPC Commands Overview
+
+### Asset Operations
+`issue`, `issueunique`, `reissue`, `transfer`, `listassets`, `listmyassets`, `getassetdata`
+
+### Restricted Assets
+`issuequalifierasset`, `issuerestrictedasset`, `addtagtoaddress`, `freezeaddress`, `checkaddresstag`
+
+### Messaging
+`sendmessage`, `viewallmessages`, `subscribetochannel`, `viewallmessagechannels`
+
+### Rewards
+`requestsnapshot`, `distributereward`, `getdistributestatus`, `getsnapshot`
+
+Use `mynta-cli help` for the complete command list.
 
 ## Documentation
 
