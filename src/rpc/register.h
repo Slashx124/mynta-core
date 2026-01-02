@@ -28,6 +28,8 @@ void RegisterMessageRPCCommands(CRPCTable &tableRPC);
 void RegisterRewardsRPCCommands(CRPCTable &tableRPC);
 /** Register masternode RPC commands */
 void RegisterMasternodeRPCCommands(CRPCTable &tableRPC);
+/** Register DEX RPC commands */
+void RegisterDexRPCCommands(CRPCTable &tableRPC);
 
 static inline void RegisterAllCoreRPCCommands(CRPCTable &t)
 {
@@ -40,6 +42,7 @@ static inline void RegisterAllCoreRPCCommands(CRPCTable &t)
     RegisterMessageRPCCommands(t);
     RegisterRewardsRPCCommands(t);
     RegisterMasternodeRPCCommands(t);
+    RegisterDexRPCCommands(t);
 }
 
 #endif
