@@ -14,7 +14,7 @@ AC_INIT([Mynta Core],m4_join([.], _CLIENT_VERSION_MAJOR, _CLIENT_VERSION_MINOR, 
 AC_CONFIG_SRCDIR([src/validation.cpp])
 AC_CONFIG_HEADERS([src/config/mynta-config.h])
 AC_CONFIG_AUX_DIR([build-aux])
-AC_CONFIG_MACRO_DIR([build-aux/m4])
+dnl AC_CONFIG_MACRO_DIRS([build-aux/m4]) - handled by ACLOCAL_AMFLAGS in Makefile.am
 
 MYNTA_DAEMON_NAME=myntad
 MYNTA_GUI_NAME=mynta-qt

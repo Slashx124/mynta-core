@@ -23,7 +23,7 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_PREREQ(2.60)
 AC_CONFIG_SRCDIR([lib/univalue.cpp])
 AC_CONFIG_AUX_DIR([build-aux])
-AC_CONFIG_MACRO_DIR([build-aux/m4])
+dnl AC_CONFIG_MACRO_DIR([build-aux/m4])
 AC_CONFIG_HEADERS([univalue-config.h])
 AM_INIT_AUTOMAKE([subdir-objects foreign])
 

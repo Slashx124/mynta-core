@@ -7,6 +7,7 @@ This document describes how to build Mynta Core (myntad, mynta-cli, mynta-qt) fr
 - Debian 12 (Bookworm)
 - Ubuntu 22.04 LTS (Jammy)
 - Ubuntu 24.04 LTS (Noble)
+- Windows 10/11 via WSL2 (Ubuntu)
 
 ## Dependencies
 
@@ -23,7 +24,8 @@ sudo apt-get install -y \
     pkg-config \
     bsdmainutils \
     python3 \
-    git
+    git \
+    dos2unix
 
 # Install required libraries
 sudo apt-get install -y \
@@ -64,13 +66,29 @@ sudo apt-get install -y \
 ### Clone Repository
 
 ```bash
-git clone https://github.com/MyntaProject/Mynta.git mynta-core
+git clone https://github.com/Slashx124/mynta-core.git
 cd mynta-core
+
+# Initialize submodules (required for BLS library)
+git submodule update --init --recursive
+```
+
+### Build the BLS Library
+
+The BLST library must be built before the main project:
+
+```bash
+cd src/bls/blst
+./build.sh
+cd ../../..
 ```
 
 ### Build Steps
 
 ```bash
+# Fix line endings if building on Windows/WSL
+dos2unix autogen.sh configure.ac Makefile.am
+
 # Generate build scripts
 ./autogen.sh
 
@@ -81,7 +99,7 @@ cd mynta-core
     --with-incompatible-bdb \
     --without-gui
 
-# Build
+# Build (use number of CPU cores)
 make -j$(nproc)
 
 # Optional: Install
@@ -117,7 +135,7 @@ After a successful build, the following binaries are available in `src/`:
 |--------|-------------|
 | `myntad` | Mynta daemon |
 | `mynta-cli` | Command-line RPC client |
-| `mynta-tx` | Transaction utility |
+| `mynta-tx` | Transaction utility (if built with --with-tx) |
 | `mynta-qt` | Qt GUI wallet (if built with Qt) |
 
 ## Running
@@ -143,6 +161,39 @@ echo "rpcpassword=$(openssl rand -base64 32)" >> ~/.mynta/mynta.conf
 
 The config file is located at `~/.mynta/mynta.conf`.
 
+## Troubleshooting
+
+### Line Ending Issues (Windows/WSL)
+
+If you encounter errors like `bad interpreter: No such file or directory`, convert line endings:
+
+```bash
+dos2unix autogen.sh configure.ac Makefile.am
+find . -name '*.sh' -exec dos2unix {} \;
+```
+
+### libtoolize AC_CONFIG_MACRO_DIRS Conflict
+
+If you see an error about `AC_CONFIG_MACRO_DIRS` conflicting with `ACLOCAL_AMFLAGS`, the configure.ac files have already been patched. If building from a fresh clone and the error persists, comment out the `AC_CONFIG_MACRO_DIR` lines in:
+
+- `configure.ac`
+- `src/secp256k1/configure.ac`
+- `src/univalue/configure.ac`
+
+### Missing ui_interface.h
+
+This header file should be present in `src/`. If missing, it can be obtained from the Ravencoin repository.
+
+### Missing libblst.a
+
+Build the BLST library first:
+
+```bash
+cd src/bls/blst
+./build.sh
+cd ../../..
+```
+
 ## Notes
 
 ### Genesis Block
@@ -162,6 +213,7 @@ Mynta inherits its genesis block from Ravencoin. The original pszTimestamp is pr
 
 - If you encounter BerkeleyDB version errors, use `--with-incompatible-bdb`
 - On newer systems with miniupnpc 2.2+, the code includes compatibility fixes
+- Man page generation may fail; this is non-critical
 
 ## Verification
 
@@ -172,5 +224,3 @@ After building, verify the version:
 ```
 
 Expected output should show "Mynta Core" with the version number.
-
-
