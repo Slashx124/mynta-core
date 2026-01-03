@@ -49,7 +49,36 @@ def wordreverse(in_buf):
 	out_words.reverse()
 	return b''.join(out_words)
 
-def calc_hash_str(blk_hdr):
+# KawPoW activation time - blocks at or after this time use 120-byte headers
+KAWPOW_ACTIVATION_TIME = 1767326914  # Mynta genesis + 1 second
+
+def get_header_size(blk_hdr_base):
+	"""Determine header size based on nTime field (KawPoW uses 120 bytes, legacy uses 80)"""
+	# nTime is at offset 68 (4 + 32 + 32)
+	if len(blk_hdr_base) >= 72:
+		nTime = struct.unpack("<I", blk_hdr_base[68:72])[0]
+		if nTime >= KAWPOW_ACTIVATION_TIME:
+			return 120  # KawPoW header: base 80 + nHeight(4) + nNonce64(8) + mix_hash(32) - nNonce(4) = 120
+	return 80  # Legacy X16R header
+
+def calc_hash_str(blk_hdr, blkindex=None, height=None):
+	"""
+	For KawPoW blocks, we cannot recompute the hash from just the header
+	because it requires DAG access. Instead, we use the hashlist from RPC.
+	For legacy blocks (pre-KawPoW), we use the X16R hash utility.
+	"""
+	# Check if this is a KawPoW block
+	if len(blk_hdr) >= 72:
+		nTime = struct.unpack("<I", blk_hdr[68:72])[0]
+		if nTime >= KAWPOW_ACTIVATION_TIME:
+			# KawPoW block - can't recompute hash, use hashlist
+			if blkindex is not None and height is not None and height < len(blkindex):
+				return blkindex[height]
+			# Fallback: use double SHA256 as identifier (not PoW hash)
+			import hashlib
+			return hashlib.sha256(hashlib.sha256(blk_hdr).digest()).hexdigest()
+	
+	# Legacy block - use X16R hash
 	x16r_hash_cmd = os.path.dirname(os.path.realpath(__file__)) + "/../../src/test/test_mynta_hash"
 	cmd = [x16r_hash_cmd, hexlify(blk_hdr).decode('utf-8'), "2"]
 	blk_hash = subprocess.run(cmd, stdout=subprocess.PIPE, check=True).stdout.decode('ascii')
@@ -208,11 +237,24 @@ class BlockDataCopier:
 				return
 			inLenLE = inhdr[4:]
 			su = struct.unpack("<I", inLenLE)
-			inLen = su[0] - 80 # length without header
-			blk_hdr = self.inF.read(80)
+			total_block_size = su[0]
+			
+			# Read first 80 bytes to determine header type
+			blk_hdr_base = self.inF.read(80)
+			header_size = get_header_size(blk_hdr_base)
+			
+			if header_size > 80:
+				# KawPoW block - read additional header bytes
+				extra_hdr = self.inF.read(header_size - 80)
+				blk_hdr = blk_hdr_base + extra_hdr
+			else:
+				blk_hdr = blk_hdr_base
+			
+			inLen = total_block_size - header_size  # length without header
 			inExtent = BlockExtent(self.inFn, self.inF.tell(), inhdr, blk_hdr, inLen)
 
-			self.hash_str = calc_hash_str(blk_hdr)
+			# For KawPoW, we try to match by expected height first
+			self.hash_str = calc_hash_str(blk_hdr, self.blkindex, self.blkCountIn)
 			if not self.hash_str in blkmap:
 				# Because blocks can be written to files out-of-order as of 0.10, the script
 				# may encounter blocks it doesn't know about. Treat as debug output.

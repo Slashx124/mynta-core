@@ -44,21 +44,32 @@ class VersionBitsWarningTest(RavenTestFramework):
         self.setup_nodes()
 
     # Send numblocks blocks via peer with nVersionToUse set.
+    # For KawPoW, we can't mine blocks in Python - instead we use the daemon's
+    # internal mining with version overrides via -blockversion
     def send_blocks_with_version(self, peer, numblocks, n_version_to_use):
-        tip = self.nodes[0].getbestblockhash()
-        height = self.nodes[0].getblockcount()
-        block_time = self.nodes[0].getblockheader(tip)["time"]+1
-        tip = int(tip, 16)
-
-        for _ in range(numblocks):
-            block = create_block(tip, create_coinbase(height+1), block_time)
-            block.nVersion = n_version_to_use
-            block.solve()
-            peer.send_message(MsgBlock(block))
-            block_time += 1
-            height += 1
-            tip = block.x16r
-        peer.sync_with_ping()
+        # For KawPoW blocks, we cannot construct and solve blocks in Python
+        # because KawPoW requires DAG access. Instead, we'll restart the node
+        # with -blockversion to set the version for mined blocks.
+        # This is a workaround for the test framework limitation.
+        
+        # Stop and restart node with blockversion override
+        self.stop_node(0)
+        self.start_node(0, extra_args=self.extra_args[0] + ["-blockversion=%d" % n_version_to_use])
+        
+        # Reconnect the peer
+        peer.add_connection(NodeConn('127.0.0.1', p2p_port(0), self.nodes[0], peer))
+        peer.wait_for_verack()
+        
+        # Mine the blocks using RPC
+        self.nodes[0].generate(numblocks)
+        
+        # Restore normal block version
+        self.stop_node(0)
+        self.start_node(0, extra_args=self.extra_args[0])
+        
+        # Reconnect the peer
+        peer.add_connection(NodeConn('127.0.0.1', p2p_port(0), self.nodes[0], peer))
+        peer.wait_for_verack()
 
     def test_versionbits_in_alert_file(self):
         with open(self.alert_filename, 'r', encoding='utf8') as f:

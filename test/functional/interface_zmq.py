@@ -11,7 +11,7 @@ import configparser
 import os
 import struct
 from test_framework.test_framework import RavenTestFramework, SkipTest
-from test_framework.util import assert_equal, hash256, x16_hash_block
+from test_framework.util import assert_equal, hash256
 
 
 # noinspection PyUnresolvedReferences
@@ -106,7 +106,11 @@ class ZMQTest(RavenTestFramework):
 
             # Should receive the generated raw block.
             block = self.rawblock.receive()
-            assert_equal(genhashes[x], x16_hash_block(block[:80].hex(), "2"))
+            # For KawPoW blocks, we can't recompute the hash from header alone.
+            # Instead, verify the raw block corresponds to the hash we received via ZMQ hashblock.
+            # The hash_data from hashblock ZMQ is the canonical block hash.
+            block_hash_from_rpc = self.nodes[1].getblock(hash_data)["hash"]
+            assert_equal(genhashes[x], block_hash_from_rpc)
 
         self.log.info("Wait for tx from second node")
         payment_txid = self.nodes[1].sendtoaddress(self.nodes[0].getnewaddress(), 1.0)

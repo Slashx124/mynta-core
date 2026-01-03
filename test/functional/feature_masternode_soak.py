@@ -31,7 +31,7 @@ from collections import defaultdict
 # Add the test framework to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'test', 'functional'))
 
-from test_framework.test_framework import BitcoinTestFramework
+from test_framework.test_framework import RavenTestFramework
 from test_framework.util import (
     assert_equal,
     connect_nodes,
@@ -104,24 +104,26 @@ ERRORS: {len(self.errors)}
 """
 
 
-class MasternodeSoakTest(BitcoinTestFramework):
+class MasternodeSoakTest(RavenTestFramework):
+    
+    def add_options(self, parser):
+        """Add custom command-line options for soak test."""
+        parser.add_option("--duration", dest="duration", default=DEFAULT_DURATION_MINUTES,
+                          type="int", help="Duration of soak test in minutes (default: %default)")
     
     def set_test_params(self):
         self.num_nodes = MIN_NODES
         self.setup_clean_chain = True
         
-        # Parse duration from args
+        # Duration will be set from options after parsing
         self.duration_minutes = DEFAULT_DURATION_MINUTES
-        for arg in sys.argv:
-            if arg.startswith('--duration='):
-                self.duration_minutes = int(arg.split('=')[1])
         
         # Parse debug level from environment
         self.debug_level = int(os.environ.get('MYNTA_DEBUG', DEBUG_MINIMAL))
         
         self.stats = SoakTestStats()
         self.lock = threading.Lock()
-        
+    
     def debug_log(self, level, message):
         """Log message if debug level is sufficient."""
         if self.debug_level >= level:
@@ -130,6 +132,10 @@ class MasternodeSoakTest(BitcoinTestFramework):
     
     def setup_network(self):
         """Set up the test network."""
+        # Get duration from parsed options
+        if hasattr(self, 'options') and hasattr(self.options, 'duration'):
+            self.duration_minutes = self.options.duration
+        
         self.setup_nodes()
         
         # Connect all nodes in a mesh

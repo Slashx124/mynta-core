@@ -26,13 +26,32 @@ class TestNode(NodeConnCB):
     def __init__(self):
         super().__init__()
         self.block_receive_map = defaultdict(int)
+        # Map from block hash (as used in getdata) to (prevBlock, merkleRoot) for identification
+        self.hash_to_id = {}
+
+    def register_block(self, block_hash_int, prev_hash, merkle_root):
+        """Register a block so we can identify it when received"""
+        self.hash_to_id[block_hash_int] = (prev_hash, merkle_root)
 
     def on_inv(self, conn, message):
         pass
 
     def on_block(self, conn, message):
-        message.block.calc_x16r()
-        self.block_receive_map[message.block.x16r] += 1
+        # For KawPoW blocks, we can't compute the hash in Python.
+        # Match received block to registered blocks by prevBlockHash + merkleRoot
+        block = message.block
+        block_id = (block.hashPrevBlock, block.hashMerkleRoot)
+        
+        # Find which registered hash this block corresponds to
+        for block_hash, registered_id in self.hash_to_id.items():
+            if registered_id == block_id:
+                self.block_receive_map[block_hash] += 1
+                return
+        
+        # Fallback for non-KawPoW or unregistered blocks
+        if not block.is_kawpow():
+            block.calc_x16r()
+            self.block_receive_map[block.x16r] += 1
 
 
 class MaxUploadTest(RavenTestFramework):
@@ -47,12 +66,20 @@ class MaxUploadTest(RavenTestFramework):
         self.utxo_cache = []
 
     def run_test(self):
-        # Before we connect anything, we first set the time on the node
-        # to be in the past, otherwise things break because the CNode
-        # time counters can't be reset backward after initialization
-        # Use genesis block time + 1 week as the "old" time to ensure it's after genesis
-        old_time = REGTEST_GENISIS_BLOCK_TIME + (2 * 60 * 60 * 24 * 7)  # 2 weeks after genesis
-        self.nodes[0].setmocktime(old_time)
+        # For maxuploadtarget, we need blocks that are "old" (>1 week) vs "new" (recent)
+        # Use mocktime relative to genesis to ensure valid block timestamps
+        # 
+        # Timeline:
+        # - genesis_time: REGTEST_GENISIS_BLOCK_TIME
+        # - old_block_time: genesis + 1 day (these blocks will be considered "old" later)
+        # - current_time: genesis + 10 days (so old blocks are >1 week old)
+        
+        genesis_time = REGTEST_GENISIS_BLOCK_TIME
+        old_block_time = genesis_time + (1 * 60 * 60 * 24)  # 1 day after genesis
+        current_time = genesis_time + (10 * 60 * 60 * 24)   # 10 days after genesis
+        
+        # Mine "old" blocks at old_block_time
+        self.nodes[0].setmocktime(old_block_time)
 
         # Generate some old blocks
         self.nodes[0].generate(130)
@@ -77,19 +104,30 @@ class MaxUploadTest(RavenTestFramework):
         mine_large_block(self.nodes[0], self.utxo_cache)
 
         # Store the hash; we'll request this later
-        big_old_block = self.nodes[0].getbestblockhash()
-        old_block_size = self.nodes[0].getblock(big_old_block, True)['size']
-        big_old_block = int(big_old_block, 16)
+        big_old_block_hash = self.nodes[0].getbestblockhash()
+        old_block_data = self.nodes[0].getblock(big_old_block_hash, True)
+        old_block_size = old_block_data['size']
+        old_block_prev = int(old_block_data['previousblockhash'], 16)
+        old_block_merkle = int(old_block_data['merkleroot'], 16)
+        big_old_block = int(big_old_block_hash, 16)
 
-        # Advance to "recent" - use genesis + 3 weeks (to be after the "old" blocks mined earlier)
-        self.nodes[0].setmocktime(REGTEST_GENISIS_BLOCK_TIME + (3 * 60 * 60 * 24 * 7))
+        # Advance to "current" time - old blocks are now >1 week old
+        self.nodes[0].setmocktime(current_time)
 
         # Mine one more block, so that the prior block looks old
         mine_large_block(self.nodes[0], self.utxo_cache)
 
         # We'll be requesting this new block too
-        big_new_block = self.nodes[0].getbestblockhash()
-        big_new_block = int(big_new_block, 16)
+        big_new_block_hash = self.nodes[0].getbestblockhash()
+        new_block_data = self.nodes[0].getblock(big_new_block_hash, True)
+        new_block_prev = int(new_block_data['previousblockhash'], 16)
+        new_block_merkle = int(new_block_data['merkleroot'], 16)
+        big_new_block = int(big_new_block_hash, 16)
+        
+        # Register blocks with all test nodes so they can identify received blocks
+        for node in test_nodes:
+            node.register_block(big_old_block, old_block_prev, old_block_merkle)
+            node.register_block(big_new_block, new_block_prev, new_block_merkle)
 
         # test_nodes[0] will test what happens if we just keep requesting the
         # the same big old block too many times (expect: disconnect)
@@ -144,8 +182,8 @@ class MaxUploadTest(RavenTestFramework):
 
         # If we advance the time by 24 hours, then the counters should reset,
         # and test_nodes[2] should be able to retrieve the old block.
-        # Use genesis + 4 weeks to ensure counters are reset
-        self.nodes[0].setmocktime(REGTEST_GENISIS_BLOCK_TIME + (4 * 60 * 60 * 24 * 7))
+        # Advance by 24+ hours from current_time
+        self.nodes[0].setmocktime(current_time + (2 * 60 * 60 * 24))
         test_nodes[2].sync_with_ping()
         test_nodes[2].send_message(getdata_request)
         test_nodes[2].sync_with_ping()
@@ -157,13 +195,20 @@ class MaxUploadTest(RavenTestFramework):
 
         # stop and start node 0 with 1MB maxuploadtarget, whitelist 127.0.0.1
         self.log.info("Restarting nodes with -whitelist=127.0.0.1")
+        # Need to pass mocktime so node accepts the future-dated blocks
+        restart_mocktime = current_time + (2 * 60 * 60 * 24)
         self.stop_node(0)
-        self.start_node(0, ["-whitelist=127.0.0.1", "-maxuploadtarget=1", "-blockmaxsize=999000"])
+        self.start_node(0, ["-whitelist=127.0.0.1", "-maxuploadtarget=1", "-blockmaxsize=999000", 
+                           "-mocktime=%d" % restart_mocktime])
 
         # recreate/reconnect a test node
         test_nodes = [TestNode()]
         connections = [NodeConn('127.0.0.1', p2p_port(0), self.nodes[0], test_nodes[0])]
         test_nodes[0].add_connection(connections[0])
+        
+        # Register blocks with the new test node
+        test_nodes[0].register_block(big_old_block, old_block_prev, old_block_merkle)
+        test_nodes[0].register_block(big_new_block, new_block_prev, new_block_merkle)
 
         NetworkThread().start()  # Start up network handling in another thread
         test_nodes[0].wait_for_verack()

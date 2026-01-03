@@ -37,7 +37,7 @@ from decimal import Decimal
 # Add test framework to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'test', 'functional'))
 
-from test_framework.test_framework import BitcoinTestFramework
+from test_framework.test_framework import RavenTestFramework
 from test_framework.util import (
     assert_equal,
     assert_greater_than,
@@ -57,7 +57,7 @@ def log_debug(level, message):
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
         print(f"[{timestamp}] {message}")
 
-class AdvancedConsensusSoakTest(BitcoinTestFramework):
+class AdvancedConsensusSoakTest(RavenTestFramework):
     def set_test_params(self):
         self.num_nodes = 6
         self.setup_clean_chain = True

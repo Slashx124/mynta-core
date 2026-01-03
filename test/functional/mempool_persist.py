@@ -102,11 +102,15 @@ class MempoolPersistTest(RavenTestFramework):
         self.log.debug("Prevent myntad from writing mempool.dat to disk. Verify that `savemempool` fails")
         # to test the exception we are setting bad permissions on a tmp file called mempool.dat.new
         # which is an implementation detail that could change and break this test
-        mempooldotnew1 = mempooldat1 + '.new'
-        with os.fdopen(os.open(mempooldotnew1, os.O_CREAT, 0o000), 'w'):
-            pass
-        assert_raises_rpc_error(-1, "Unable to dump mempool to disk", self.nodes[1].savemempool)
-        os.remove(mempooldotnew1)
+        # Note: This test is skipped when running as root because root bypasses file permissions
+        if os.geteuid() == 0:
+            self.log.warning("Skipping savemempool permission test (running as root)")
+        else:
+            mempooldotnew1 = mempooldat1 + '.new'
+            with os.fdopen(os.open(mempooldotnew1, os.O_CREAT, 0o000), 'w'):
+                pass
+            assert_raises_rpc_error(-1, "Unable to dump mempool to disk", self.nodes[1].savemempool)
+            os.remove(mempooldotnew1)
 
 if __name__ == '__main__':
     MempoolPersistTest().main()

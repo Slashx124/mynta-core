@@ -628,8 +628,12 @@ class CTransaction:
                % (self.nVersion, repr(self.vin), repr(self.vout), repr(self.wit), self.nLockTime)
 
 
+# KawPoW activation time - blocks at or after this time use 120-byte headers
+KAWPOW_ACTIVATION_TIME = 1767326914  # Mynta genesis + 1 second
+
 class CBlockHeader:
-    __slots__ = ("nVersion", "hashPrevBlock", "hashMerkleRoot", "nTime", "nBits", "nNonce", "x16r", "hash")
+    __slots__ = ("nVersion", "hashPrevBlock", "hashMerkleRoot", "nTime", "nBits", 
+                 "nNonce", "nHeight", "nNonce64", "mix_hash", "x16r", "hash")
 
     def __init__(self, header=None):
         if header is None:
@@ -641,9 +645,11 @@ class CBlockHeader:
             self.nTime = header.nTime
             self.nBits = header.nBits
             self.nNonce = header.nNonce
+            self.nHeight = getattr(header, 'nHeight', 0)
+            self.nNonce64 = getattr(header, 'nNonce64', 0)
+            self.mix_hash = getattr(header, 'mix_hash', 0)
             self.x16r = header.x16r
             self.hash = header.hash
-            self.calc_x16r()
 
     def set_null(self):
         self.nVersion = 1
@@ -652,8 +658,15 @@ class CBlockHeader:
         self.nTime = 0
         self.nBits = 0
         self.nNonce = 0
+        self.nHeight = 0
+        self.nNonce64 = 0
+        self.mix_hash = 0
         self.x16r = None
         self.hash = None
+
+    def is_kawpow(self):
+        """Check if this block uses KawPoW based on timestamp"""
+        return self.nTime >= KAWPOW_ACTIVATION_TIME
 
     def deserialize(self, f):
         self.nVersion = struct.unpack("<i", f.read(4))[0]
@@ -661,7 +674,20 @@ class CBlockHeader:
         self.hashMerkleRoot = deser_uint256(f)
         self.nTime = struct.unpack("<I", f.read(4))[0]
         self.nBits = struct.unpack("<I", f.read(4))[0]
-        self.nNonce = struct.unpack("<I", f.read(4))[0]
+        
+        if self.is_kawpow():
+            # KawPoW header: nHeight + nNonce64 + mix_hash
+            self.nHeight = struct.unpack("<I", f.read(4))[0]
+            self.nNonce64 = struct.unpack("<Q", f.read(8))[0]
+            self.mix_hash = deser_uint256(f)
+            self.nNonce = 0  # Not used in KawPoW
+        else:
+            # Legacy X16R header
+            self.nNonce = struct.unpack("<I", f.read(4))[0]
+            self.nHeight = 0
+            self.nNonce64 = 0
+            self.mix_hash = 0
+        
         self.x16r = None
         self.hash = None
 
@@ -672,11 +698,19 @@ class CBlockHeader:
         r += ser_uint256(self.hashMerkleRoot)
         r += struct.pack("<I", self.nTime)
         r += struct.pack("<I", self.nBits)
-        r += struct.pack("<I", self.nNonce)
+        
+        if self.is_kawpow():
+            r += struct.pack("<I", self.nHeight)
+            r += struct.pack("<Q", self.nNonce64)
+            r += ser_uint256(self.mix_hash)
+        else:
+            r += struct.pack("<I", self.nNonce)
         return r
 
     def calc_x16r(self):
-        if self.x16r is None:
+        # For KawPoW, we can't compute the hash - it requires DAG access
+        # The hash should be set externally via RPC or from received data
+        if self.x16r is None and not self.is_kawpow():
             r = b""
             r += struct.pack("<i", self.nVersion)
             r += ser_uint256(self.hashPrevBlock)
@@ -689,13 +723,19 @@ class CBlockHeader:
 
     def rehash(self):
         self.x16r = None
-        self.calc_x16r()
+        if not self.is_kawpow():
+            self.calc_x16r()
         return self.x16r
 
     def __repr__(self):
-        return "CBlockHeader(nVersion=%i hashPrevBlock=%064x hashMerkleRoot=%064x nTime=%s nBits=%08x nNonce=%08x)" \
-               % (self.nVersion, self.hashPrevBlock, self.hashMerkleRoot,
-                  time.ctime(self.nTime), self.nBits, self.nNonce)
+        if self.is_kawpow():
+            return "CBlockHeader(nVersion=%i hashPrevBlock=%064x hashMerkleRoot=%064x nTime=%s nBits=%08x nHeight=%d nNonce64=%d)" \
+                   % (self.nVersion, self.hashPrevBlock, self.hashMerkleRoot,
+                      time.ctime(self.nTime), self.nBits, self.nHeight, self.nNonce64)
+        else:
+            return "CBlockHeader(nVersion=%i hashPrevBlock=%064x hashMerkleRoot=%064x nTime=%s nBits=%08x nNonce=%08x)" \
+                   % (self.nVersion, self.hashPrevBlock, self.hashMerkleRoot,
+                      time.ctime(self.nTime), self.nBits, self.nNonce)
 
 
 class CBlock(CBlockHeader):
