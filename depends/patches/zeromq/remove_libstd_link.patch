@@ -1,0 +1,12 @@
+--- a/configure
++++ b/configure
+@@ -17908,7 +17908,7 @@ $as_echo "#define ZMQ_HAVE_MINGW32 1" >>confdefs.h
+         if test "x$enable_static" = "xyes"; then
+             PKGCFG_LIBS_PRIVATE="$PKGCFG_LIBS_PRIVATE -liphlpapi"
+         fi
+-        LIBS="-lstdc++ -liphlpapi $LIBS"
++        LIBS="-liphlpapi $LIBS"
+         libzmq_pedantic="no"
+         libzmq_werror="no"
+         ;;
+
