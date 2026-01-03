@@ -125,7 +125,7 @@ public:
         consensus.nSegwitEnabled = true;
         consensus.nCSVEnabled = true;
         consensus.powLimit = uint256S("00000fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.kawpowLimit = uint256S("0000000000ffffffffffffffffffffffffffffffffffffffffffffffffffffff"); // Estimated starting diff for first 180 kawpow blocks
+        consensus.kawpowLimit = uint256S("00000064ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"); // ~100x easier starting difficulty for KawPoW
         consensus.nPowTargetTimespan = 2016 * 60; // 1.4 days
         consensus.nPowTargetSpacing = 1 * 60;
 		consensus.fPowAllowMinDifficultyBlocks = false;
