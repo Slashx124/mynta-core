@@ -255,7 +255,8 @@ public:
         strGlobalBurnAddress = "RXBurnXXXXXXXXXXXXXXXXXXXXXXWUo9FV";
 
         // DGW Activation
-        nDGWActivationBlock = 338778;
+        // Dark Gravity Wave activates at block 10 for faster difficulty adjustment
+        nDGWActivationBlock = 10;
 
         nMaxReorganizationDepth = 60; // 60 at 1 minute block timespan is +/- 60 minutes.
         nMinReorganizationPeers = 4;
