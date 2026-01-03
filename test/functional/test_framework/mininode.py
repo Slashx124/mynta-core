@@ -45,7 +45,7 @@ mininode_lock = RLock()
 
 
 class NodeConnCB:
-    """Callback and helper functions for P2P connection to a ravend node.
+    """Callback and helper functions for P2P connection to a myntad node.
 
     Individual test cases should subclass this and override the on_* methods
     if they want to alter message handling behaviour.

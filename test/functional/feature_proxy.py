@@ -5,13 +5,13 @@
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 """
-Test ravend with different proxy configuration.
+Test myntad with different proxy configuration.
 
 Test plan:
-- Start ravend's with different proxy configurations
+- Start myntad's with different proxy configurations
 - Use addnode to initiate connections
 - Verify that proxies are connected to, and the right connection command is given
-- Proxy configurations to test on ravend side:
+- Proxy configurations to test on myntad side:
     - `-proxy` (proxy everything)
     - `-onion` (proxy just onions)
     - `-proxyrandomize` Circuit randomization
@@ -21,8 +21,8 @@ Test plan:
     - proxy on IPv6
 
 - Create various proxies (as threads)
-- Create ravends that connect to them
-- Manipulate the ravends using addnode (onetry) an observe effects
+- Create myntads that connect to them
+- Manipulate the myntads using addnode (onetry) an observe effects
 
 addnode connect to IPv4
 addnode connect to IPv6
@@ -93,7 +93,7 @@ class ProxyTest(RavenTestFramework):
         node.addnode("15.61.23.23:1234", "onetry")
         cmd = proxies[0].queue.get()
         assert(isinstance(cmd, Socks5Command))
-        # Note: ravend's SOCKS5 implementation only sends atyp DOMAINNAME, even if connecting directly to IPv4/IPv6
+        # Note: myntad's SOCKS5 implementation only sends atyp DOMAINNAME, even if connecting directly to IPv4/IPv6
         assert_equal(cmd.atyp, AddressType.DOMAINNAME)
         assert_equal(cmd.addr, b"15.61.23.23")
         assert_equal(cmd.port, 1234)
@@ -107,7 +107,7 @@ class ProxyTest(RavenTestFramework):
             node.addnode("[1233:3432:2434:2343:3234:2345:6546:4534]:5443", "onetry")
             cmd = proxies[1].queue.get()
             assert(isinstance(cmd, Socks5Command))
-            # Note: ravend's SOCKS5 implementation only sends atyp DOMAINNAME, even if connecting directly to IPv4/IPv6
+            # Note: myntad's SOCKS5 implementation only sends atyp DOMAINNAME, even if connecting directly to IPv4/IPv6
             assert_equal(cmd.atyp, AddressType.DOMAINNAME)
             assert_equal(cmd.addr, b"1233:3432:2434:2343:3234:2345:6546:4534")
             assert_equal(cmd.port, 5443)

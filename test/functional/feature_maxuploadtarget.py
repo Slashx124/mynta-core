@@ -18,6 +18,7 @@ from collections import defaultdict
 import time
 from test_framework.mininode import NodeConn, NodeConnCB, NetworkThread, MsgGetdata, CInv
 from test_framework.test_framework import RavenTestFramework
+from test_framework.blocktools import REGTEST_GENISIS_BLOCK_TIME
 from test_framework.util import p2p_port, mine_large_block, assert_equal
 
 
@@ -49,7 +50,8 @@ class MaxUploadTest(RavenTestFramework):
         # Before we connect anything, we first set the time on the node
         # to be in the past, otherwise things break because the CNode
         # time counters can't be reset backward after initialization
-        old_time = int(time.time() - 2 * 60 * 60 * 24 * 7)
+        # Use genesis block time + 1 week as the "old" time to ensure it's after genesis
+        old_time = REGTEST_GENISIS_BLOCK_TIME + (2 * 60 * 60 * 24 * 7)  # 2 weeks after genesis
         self.nodes[0].setmocktime(old_time)
 
         # Generate some old blocks
@@ -79,8 +81,8 @@ class MaxUploadTest(RavenTestFramework):
         old_block_size = self.nodes[0].getblock(big_old_block, True)['size']
         big_old_block = int(big_old_block, 16)
 
-        # Advance to two days ago
-        self.nodes[0].setmocktime(int(time.time()) - 2 * 60 * 60 * 24)
+        # Advance to "recent" - use genesis + 3 weeks (to be after the "old" blocks mined earlier)
+        self.nodes[0].setmocktime(REGTEST_GENISIS_BLOCK_TIME + (3 * 60 * 60 * 24 * 7))
 
         # Mine one more block, so that the prior block looks old
         mine_large_block(self.nodes[0], self.utxo_cache)
@@ -142,7 +144,8 @@ class MaxUploadTest(RavenTestFramework):
 
         # If we advance the time by 24 hours, then the counters should reset,
         # and test_nodes[2] should be able to retrieve the old block.
-        self.nodes[0].setmocktime(int(time.time()))
+        # Use genesis + 4 weeks to ensure counters are reset
+        self.nodes[0].setmocktime(REGTEST_GENISIS_BLOCK_TIME + (4 * 60 * 60 * 24 * 7))
         test_nodes[2].sync_with_ping()
         test_nodes[2].send_message(getdata_request)
         test_nodes[2].sync_with_ping()

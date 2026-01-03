@@ -53,7 +53,7 @@ class ZMQTest(RavenTestFramework):
         config.read_file(open(self.options.configfile))
 
         if not config["components"].getboolean("ENABLE_ZMQ"):
-            raise SkipTest("ravend has not been built with zmq enabled.")
+            raise SkipTest("myntad has not been built with zmq enabled.")
 
         # Initialize ZMQ context and socket.
         # All messages are received in the same socket which means
