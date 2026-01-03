@@ -74,6 +74,10 @@ build_linux() {
     print_header "Building dependencies for Linux..."
     cd depends
     make HOST=x86_64-pc-linux-gnu NO_QT=1 -j$NPROC
+    
+    # Fix line endings in generated files (CRLF -> LF)
+    find . -name "config.site" -exec dos2unix {} \; 2>/dev/null || true
+    find . -name "*.sh" -exec dos2unix {} \; 2>/dev/null || true
     cd "$SOURCE_DIR"
     
     # Build BLST library
@@ -127,6 +131,10 @@ build_windows() {
     print_header "Building dependencies for Windows..."
     cd depends
     make HOST=x86_64-w64-mingw32 NO_QT=1 -j$NPROC
+    
+    # Fix line endings in generated files (CRLF -> LF)
+    find . -name "config.site" -exec dos2unix {} \; 2>/dev/null || true
+    find . -name "*.sh" -exec dos2unix {} \; 2>/dev/null || true
     cd "$SOURCE_DIR"
     
     # Build BLST library for Windows
