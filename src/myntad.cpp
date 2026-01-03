@@ -95,6 +95,12 @@ bool AppInit(int argc, char* argv[])
         return true;
     }
 
+    // Initialize data directory and create sample config on first run
+    // (only if user didn't specify a custom datadir)
+    if (!gArgs.IsArgSet("-datadir")) {
+        InitializeDataDirAndConfig();
+    }
+
     try
     {
         if (!fs::is_directory(GetDataDir(false)))

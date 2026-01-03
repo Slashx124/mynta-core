@@ -194,6 +194,12 @@ void ClearDatadirCache();
 
 fs::path GetConfigFile(const std::string &confPath);
 
+/**
+ * Initialize data directory and create sample config if needed.
+ * Returns true if this is a first-run (directories/config were created).
+ */
+bool InitializeDataDirAndConfig();
+
 #ifndef WIN32
 
 fs::path GetPidFile();

@@ -626,6 +626,124 @@ fs::path GetConfigFile(const std::string &confPath)
     return pathConfigFile;
 }
 
+/**
+ * Generate a random alphanumeric string for RPC password
+ */
+static std::string GenerateRandomPassword(size_t length = 32)
+{
+    static const char charset[] = 
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
+    
+    std::string result;
+    result.reserve(length);
+    
+    // Use GetRandBytes for cryptographic randomness
+    std::vector<unsigned char> randomBytes(length);
+    GetRandBytes(randomBytes.data(), length);
+    
+    for (size_t i = 0; i < length; i++) {
+        result += charset[randomBytes[i] % (sizeof(charset) - 1)];
+    }
+    
+    return result;
+}
+
+bool InitializeDataDirAndConfig()
+{
+    fs::path dataDir = GetDefaultDataDir();
+    fs::path configFile = dataDir / MYNTA_CONF_FILENAME;
+    
+    bool createdDataDir = false;
+    bool createdConfig = false;
+    
+    // Check and create data directory
+    if (!fs::exists(dataDir)) {
+        try {
+            fs::create_directories(dataDir);
+            createdDataDir = true;
+        } catch (const fs::filesystem_error& e) {
+            // If we can't create the directory, just return - error will be handled later
+            return false;
+        }
+    }
+    
+    // Check and create sample config file
+    if (!fs::exists(configFile)) {
+        try {
+            std::string rpcUser = "myntarpc";
+            std::string rpcPassword = GenerateRandomPassword(32);
+            
+            // Create sample config content
+            std::string configContent = 
+                "# Mynta Core Configuration File\n"
+                "# This file was auto-generated on first run.\n"
+                "#\n"
+                "# For more options, see: https://github.com/Slashx124/mynta-core\n"
+                "\n"
+                "# RPC Settings (required for mynta-cli to work)\n"
+                "rpcuser=" + rpcUser + "\n"
+                "rpcpassword=" + rpcPassword + "\n"
+                "\n"
+                "# Enable the RPC server\n"
+                "server=1\n"
+                "\n"
+                "# Optional: Bind RPC to localhost only (recommended for security)\n"
+                "rpcbind=127.0.0.1\n"
+                "rpcallowip=127.0.0.1\n"
+                "\n"
+                "# Optional: Transaction index (needed for some RPC calls)\n"
+                "#txindex=1\n"
+                "\n"
+                "# Optional: Reduce storage requirements (prune old blocks)\n"
+                "#prune=550\n"
+                "\n"
+                "# Network settings\n"
+                "#listen=1\n"
+                "#maxconnections=125\n";
+            
+            // Write config file
+            fs::ofstream configStream(configFile);
+            if (configStream.good()) {
+                configStream << configContent;
+                configStream.close();
+                createdConfig = true;
+            }
+        } catch (const std::exception& e) {
+            // If we can't create config, just continue - it's not critical
+        }
+    }
+    
+    // If we created anything, print a message to the user
+    if (createdDataDir || createdConfig) {
+        fprintf(stdout, "\n");
+        fprintf(stdout, "=============================================================\n");
+        fprintf(stdout, "  Mynta Core - First Run Setup\n");
+        fprintf(stdout, "=============================================================\n");
+        
+        if (createdDataDir) {
+            fprintf(stdout, "\n  Created data directory:\n");
+            fprintf(stdout, "    %s\n", dataDir.string().c_str());
+        }
+        
+        if (createdConfig) {
+            fprintf(stdout, "\n  Created configuration file:\n");
+            fprintf(stdout, "    %s\n", configFile.string().c_str());
+            fprintf(stdout, "\n  The config includes RPC credentials for mynta-cli.\n");
+            fprintf(stdout, "  You can edit this file to customize your node settings.\n");
+        }
+        
+        fprintf(stdout, "\n=============================================================\n");
+        fprintf(stdout, "\n");
+        fflush(stdout);
+        
+        return true;
+    }
+    
+    return false;
+}
+
 void ArgsManager::ReadConfigFile(const std::string &confPath)
 {
     fs::ifstream streamConfig(GetConfigFile(confPath));
