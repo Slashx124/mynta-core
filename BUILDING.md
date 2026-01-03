@@ -194,6 +194,76 @@ cd src/bls/blst
 cd ../../..
 ```
 
+## Cross-Compiling for Windows
+
+Mynta Core can be cross-compiled for Windows 64-bit from Linux using mingw-w64.
+
+### Install Cross-Compiler
+
+```bash
+# Install mingw-w64 cross-compiler
+sudo apt-get install -y g++-mingw-w64-x86-64 mingw-w64-x86-64-dev nsis
+
+# Set mingw to use posix threading (required)
+sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+```
+
+### Build Dependencies
+
+The `depends` system builds all required libraries for Windows:
+
+```bash
+cd depends
+
+# IMPORTANT: Clear Windows PATH if building in WSL (paths with spaces break the build)
+export PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+# Build dependencies for Windows 64-bit (takes 15-30 minutes)
+make HOST=x86_64-w64-mingw32 NO_QT=1 -j$(nproc)
+
+cd ..
+```
+
+### Build BLST for Windows
+
+```bash
+cd src/bls/blst
+rm -f libblst.a *.o 2>/dev/null
+CC=x86_64-w64-mingw32-gcc ./build.sh
+cd ../../..
+```
+
+### Configure and Build
+
+```bash
+# Set PATH to avoid Windows path issues in WSL
+export PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+# Configure with depends
+export CONFIG_SITE=$PWD/depends/x86_64-w64-mingw32/share/config.site
+./configure \
+    --prefix=/ \
+    --disable-bench \
+    --disable-tests \
+    --disable-shared \
+    --without-gui \
+    --with-incompatible-bdb \
+    PTHREAD_LIBS='-lpthread' \
+    LIBS='-lpthread'
+
+# Build
+make -j$(nproc)
+```
+
+### Windows Executables
+
+After successful build, the executables are in `src/`:
+- `myntad.exe` - Mynta daemon
+- `mynta-cli.exe` - Command-line RPC client
+
+These are fully static, standalone executables that can be copied to any Windows 10/11 x64 system.
+
 ## Notes
 
 ### Genesis Block

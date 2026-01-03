@@ -572,7 +572,7 @@ if GLIBC_BACK_COMPAT
 endif
 
 libmyntaconsensus_la_LDFLAGS = $(AM_LDFLAGS) -no-undefined $(RELDFLAGS)
-libmyntaconsensus_la_LIBADD = $(LIBSECP256K1) $(BOOST_LIBS)
+libmyntaconsensus_la_LIBADD = $(LIBSECP256K1) $(BOOST_LIBS) $(PTHREAD_LIBS)
 libmyntaconsensus_la_CPPFLAGS = $(AM_CPPFLAGS) -I$(builddir)/obj -I$(srcdir)/secp256k1/include -DBUILD_MYNTA_INTERNAL
 libmyntaconsensus_la_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
 
