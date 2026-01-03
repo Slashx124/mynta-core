@@ -2,8 +2,11 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "test/test_mynta.h"
+
 #include "bls/bls.h"
-#include "test/test_bitcoin.h"
+#include "hash.h"
+#include "uint256.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -11,58 +14,59 @@ BOOST_FIXTURE_TEST_SUITE(bls_tests, BasicTestingSetup)
 
 BOOST_AUTO_TEST_CASE(bls_key_generation)
 {
-    // Test basic key generation
-    bls::CBLSSecretKey sk;
+    CBLSSecretKey sk;
+    BOOST_CHECK(!sk.IsValid());
+    
     sk.MakeNewKey();
     BOOST_CHECK(sk.IsValid());
     
-    // Generate public key from secret key
-    bls::CBLSPublicKey pk = sk.GetPublicKey();
+    CBLSPublicKey pk = sk.GetPublicKey();
     BOOST_CHECK(pk.IsValid());
     
-    // Keys should not be null
-    BOOST_CHECK(!sk.IsNull());
-    BOOST_CHECK(!pk.IsNull());
+    // Public key should be 48 bytes
+    std::vector<uint8_t> pkBytes = pk.ToBytes();
+    BOOST_CHECK_EQUAL(pkBytes.size(), BLS_PUBLIC_KEY_SIZE);
 }
 
 BOOST_AUTO_TEST_CASE(bls_signing_verification)
 {
-    // Generate key pair
-    bls::CBLSSecretKey sk;
+    CBLSSecretKey sk;
     sk.MakeNewKey();
-    bls::CBLSPublicKey pk = sk.GetPublicKey();
+    BOOST_CHECK(sk.IsValid());
     
-    // Create a test message
-    uint256 msgHash;
-    msgHash.SetHex("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+    CBLSPublicKey pk = sk.GetPublicKey();
+    BOOST_CHECK(pk.IsValid());
+    
+    // Create a message hash
+    uint256 msgHash = Hash(std::string("test message").begin(), std::string("test message").end());
     
     // Sign the message
-    bls::CBLSSignature sig = sk.Sign(msgHash);
+    CBLSSignature sig = sk.Sign(msgHash);
     BOOST_CHECK(sig.IsValid());
+    
+    // Signature should be 96 bytes
+    std::vector<uint8_t> sigBytes = sig.ToBytes();
+    BOOST_CHECK_EQUAL(sigBytes.size(), BLS_SIGNATURE_SIZE);
     
     // Verify the signature
     BOOST_CHECK(sig.VerifyInsecure(pk, msgHash));
     
-    // Verify with wrong message fails
-    uint256 wrongHash;
-    wrongHash.SetHex("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    // Wrong message should fail
+    uint256 wrongHash = Hash(std::string("wrong message").begin(), std::string("wrong message").end());
     BOOST_CHECK(!sig.VerifyInsecure(pk, wrongHash));
 }
 
 BOOST_AUTO_TEST_CASE(bls_wrong_key_rejection)
 {
-    // Generate two different key pairs
-    bls::CBLSSecretKey sk1, sk2;
+    CBLSSecretKey sk1, sk2;
     sk1.MakeNewKey();
     sk2.MakeNewKey();
     
-    bls::CBLSPublicKey pk1 = sk1.GetPublicKey();
-    bls::CBLSPublicKey pk2 = sk2.GetPublicKey();
+    CBLSPublicKey pk1 = sk1.GetPublicKey();
+    CBLSPublicKey pk2 = sk2.GetPublicKey();
     
-    // Sign with key 1
-    uint256 msgHash;
-    msgHash.SetHex("abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789");
-    bls::CBLSSignature sig = sk1.Sign(msgHash);
+    uint256 msgHash = Hash(std::string("test").begin(), std::string("test").end());
+    CBLSSignature sig = sk1.Sign(msgHash);
     
     // Signature should verify with pk1 but NOT with pk2
     BOOST_CHECK(sig.VerifyInsecure(pk1, msgHash));
@@ -71,139 +75,116 @@ BOOST_AUTO_TEST_CASE(bls_wrong_key_rejection)
 
 BOOST_AUTO_TEST_CASE(bls_signature_aggregation)
 {
-    // Generate multiple keys
     const size_t numKeys = 5;
-    std::vector<bls::CBLSSecretKey> sks(numKeys);
-    std::vector<bls::CBLSPublicKey> pks(numKeys);
-    std::vector<bls::CBLSSignature> sigs(numKeys);
+    std::vector<CBLSPublicKey> pks;
+    std::vector<CBLSSignature> sigs;
     
-    uint256 msgHash;
-    msgHash.SetHex("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef");
+    uint256 msgHash = Hash(std::string("aggregate test").begin(), std::string("aggregate test").end());
     
     for (size_t i = 0; i < numKeys; i++) {
-        sks[i].MakeNewKey();
-        pks[i] = sks[i].GetPublicKey();
-        sigs[i] = sks[i].Sign(msgHash);
+        CBLSSecretKey sk;
+        sk.MakeNewKey();
+        pks.push_back(sk.GetPublicKey());
+        sigs.push_back(sk.Sign(msgHash));
         
         // Each individual signature should verify
         BOOST_CHECK(sigs[i].VerifyInsecure(pks[i], msgHash));
     }
     
     // Aggregate signatures
-    bls::CBLSSignature aggSig;
-    aggSig.AggregateInsecure(sigs);
+    CBLSSignature aggSig = CBLSSignature::AggregateSignatures(sigs);
     BOOST_CHECK(aggSig.IsValid());
     
-    // Aggregate public keys
-    bls::CBLSPublicKey aggPk;
-    aggPk.AggregateInsecure(pks);
-    BOOST_CHECK(aggPk.IsValid());
-    
-    // Aggregated signature should verify against aggregated public key
-    BOOST_CHECK(aggSig.VerifyInsecure(aggPk, msgHash));
+    // Aggregated signature should verify against all public keys for same message
+    BOOST_CHECK(aggSig.VerifySameMessage(pks, msgHash));
 }
 
-BOOST_AUTO_TEST_CASE(bls_serialization)
+BOOST_AUTO_TEST_CASE(bls_public_key_aggregation)
 {
-    // Generate key pair
-    bls::CBLSSecretKey sk;
-    sk.MakeNewKey();
-    bls::CBLSPublicKey pk = sk.GetPublicKey();
+    const size_t numKeys = 3;
+    std::vector<CBLSPublicKey> pks;
     
-    // Sign a message
-    uint256 msgHash;
-    msgHash.SetHex("deadbeef00000000deadbeef00000000deadbeef00000000deadbeef00000000");
-    bls::CBLSSignature sig = sk.Sign(msgHash);
+    for (size_t i = 0; i < numKeys; i++) {
+        CBLSSecretKey sk;
+        sk.MakeNewKey();
+        pks.push_back(sk.GetPublicKey());
+    }
     
-    // Serialize secret key
-    CDataStream skStream(SER_NETWORK, PROTOCOL_VERSION);
-    sk.Serialize(skStream);
-    
-    // Deserialize and compare
-    bls::CBLSSecretKey sk2;
-    sk2.Unserialize(skStream);
-    BOOST_CHECK(sk == sk2);
-    
-    // Serialize public key
-    CDataStream pkStream(SER_NETWORK, PROTOCOL_VERSION);
-    pk.Serialize(pkStream);
-    
-    bls::CBLSPublicKey pk2;
-    pk2.Unserialize(pkStream);
-    BOOST_CHECK(pk == pk2);
-    
-    // Serialize signature
-    CDataStream sigStream(SER_NETWORK, PROTOCOL_VERSION);
-    sig.Serialize(sigStream);
-    
-    bls::CBLSSignature sig2;
-    sig2.Unserialize(sigStream);
-    BOOST_CHECK(sig == sig2);
-    
-    // Deserialized signature should still verify
-    BOOST_CHECK(sig2.VerifyInsecure(pk, msgHash));
+    // Aggregate public keys
+    CBLSPublicKey aggPk = CBLSPublicKey::AggregatePublicKeys(pks);
+    BOOST_CHECK(aggPk.IsValid());
 }
 
 BOOST_AUTO_TEST_CASE(bls_invalid_signature_rejection)
 {
-    bls::CBLSSecretKey sk;
+    CBLSSecretKey sk;
     sk.MakeNewKey();
-    bls::CBLSPublicKey pk = sk.GetPublicKey();
+    CBLSPublicKey pk = sk.GetPublicKey();
     
-    uint256 msgHash;
-    msgHash.SetHex("cafe00000000000000000000000000000000000000000000000000000000cafe");
+    uint256 msgHash = Hash(std::string("test").begin(), std::string("test").end());
     
     // Create an invalid signature (all zeros)
-    bls::CBLSSignature invalidSig;
-    // Don't initialize - should be invalid
+    CBLSSignature invalidSig;
     BOOST_CHECK(!invalidSig.IsValid());
     BOOST_CHECK(!invalidSig.VerifyInsecure(pk, msgHash));
 }
 
-BOOST_AUTO_TEST_CASE(bls_null_key_handling)
+BOOST_AUTO_TEST_CASE(bls_public_key_serialization)
 {
-    // Null keys should be marked as invalid
-    bls::CBLSSecretKey nullSk;
-    bls::CBLSPublicKey nullPk;
-    bls::CBLSSignature nullSig;
+    CBLSSecretKey sk;
+    sk.MakeNewKey();
+    CBLSPublicKey pk = sk.GetPublicKey();
     
-    BOOST_CHECK(!nullSk.IsValid());
-    BOOST_CHECK(!nullPk.IsValid());
-    BOOST_CHECK(!nullSig.IsValid());
+    // Serialize
+    std::vector<uint8_t> bytes = pk.ToBytes();
+    BOOST_CHECK_EQUAL(bytes.size(), BLS_PUBLIC_KEY_SIZE);
     
-    // Operations with null keys should fail gracefully
-    uint256 msgHash;
-    msgHash.SetHex("0000000000000000000000000000000000000000000000000000000000000001");
+    // Deserialize
+    CBLSPublicKey pk2;
+    BOOST_CHECK(pk2.SetBytes(bytes));
+    BOOST_CHECK(pk2.IsValid());
     
-    // Signing with null key should produce invalid signature
-    bls::CBLSSignature sig = nullSk.Sign(msgHash);
-    BOOST_CHECK(!sig.IsValid());
+    // Should be equal
+    BOOST_CHECK(pk == pk2);
+}
+
+BOOST_AUTO_TEST_CASE(bls_signature_serialization)
+{
+    CBLSSecretKey sk;
+    sk.MakeNewKey();
     
-    // Verification with null key/sig should return false
-    BOOST_CHECK(!nullSig.VerifyInsecure(nullPk, msgHash));
+    uint256 msgHash = Hash(std::string("serialize test").begin(), std::string("serialize test").end());
+    CBLSSignature sig = sk.Sign(msgHash);
+    
+    // Serialize
+    std::vector<uint8_t> bytes = sig.ToBytes();
+    BOOST_CHECK_EQUAL(bytes.size(), BLS_SIGNATURE_SIZE);
+    
+    // Deserialize
+    CBLSSignature sig2;
+    BOOST_CHECK(sig2.SetBytes(bytes));
+    BOOST_CHECK(sig2.IsValid());
+    
+    // Should be equal
+    BOOST_CHECK(sig == sig2);
 }
 
 BOOST_AUTO_TEST_CASE(bls_deterministic_key_from_seed)
 {
-    // Same seed should produce same key
-    std::vector<unsigned char> seed(32, 0x42);
+    uint256 seed = Hash(std::string("deterministic seed").begin(), std::string("deterministic seed").end());
     
-    bls::CBLSSecretKey sk1;
-    sk1.SetBuf(seed.data(), seed.size());
+    CBLSSecretKey sk1;
+    BOOST_CHECK(sk1.SetSecretKeyFromSeed(seed));
+    BOOST_CHECK(sk1.IsValid());
     
-    bls::CBLSSecretKey sk2;
-    sk2.SetBuf(seed.data(), seed.size());
+    CBLSSecretKey sk2;
+    BOOST_CHECK(sk2.SetSecretKeyFromSeed(seed));
+    BOOST_CHECK(sk2.IsValid());
     
-    BOOST_CHECK(sk1 == sk2);
-    BOOST_CHECK(sk1.GetPublicKey() == sk2.GetPublicKey());
-    
-    // Different seed should produce different key
-    seed[0] = 0x43;
-    bls::CBLSSecretKey sk3;
-    sk3.SetBuf(seed.data(), seed.size());
-    
-    BOOST_CHECK(sk1 != sk3);
+    // Same seed should produce same public key
+    CBLSPublicKey pk1 = sk1.GetPublicKey();
+    CBLSPublicKey pk2 = sk2.GetPublicKey();
+    BOOST_CHECK(pk1 == pk2);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
-

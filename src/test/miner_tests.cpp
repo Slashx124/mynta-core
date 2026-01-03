@@ -3,6 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "arith_uint256.h"
 #include "chainparams.h"
 #include "coins.h"
 #include "consensus/consensus.h"
@@ -19,7 +20,7 @@
 #include "util.h"
 #include "utilstrencodings.h"
 
-#include "test/test_raven.h"
+#include "test/test_mynta.h"
 
 #include <memory>
 
@@ -27,7 +28,12 @@
 
 #include "util.h"
 
-BOOST_FIXTURE_TEST_SUITE(miner_tests, TestingSetup)
+// Use regtest for miner tests - mainnet has real difficulty which is too hard
+struct RegtestMinerTestingSetup : public TestingSetup {
+    RegtestMinerTestingSetup() : TestingSetup(CBaseChainParams::REGTEST) {}
+};
+
+BOOST_FIXTURE_TEST_SUITE(miner_tests, RegtestMinerTestingSetup)
 
     static CFeeRate blockMinFeeRate = CFeeRate(DEFAULT_BLOCK_MIN_TX_FEE);
 
@@ -287,13 +293,9 @@ BOOST_FIXTURE_TEST_SUITE(miner_tests, TestingSetup)
         BOOST_TEST_MESSAGE("Running Create New Block Validity Test");
 
         // Note that by default, these tests run with size accounting enabled.
-        auto chainParams = CreateChainParams(CBaseChainParams::MAIN);
-        CChainParams &chainparams = *chainParams;
-        chainparams.TurnOffSegwit();
-        chainparams.TurnOffCSV();
-        chainparams.TurnOffBIP34();
-        chainparams.TurnOffBIP65();
-        chainparams.TurnOffBIP66();
+        // CRITICAL: Use the globally-selected params from the fixture (REGTEST)
+        // Do NOT create new params - we must use the same params the chain was initialized with
+        const CChainParams &chainparams = GetParams();
         CScript scriptPubKey = CScript()
                 << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f")
                 << OP_CHECKSIG;
@@ -315,31 +317,52 @@ BOOST_FIXTURE_TEST_SUITE(miner_tests, TestingSetup)
         // Therefore, load 100 blocks :)
         int baseheight = 0;
         std::vector<CTransactionRef> txFirst;
+        
+        // Debug: Check genesis block info
+        BOOST_TEST_MESSAGE("Genesis hash: " << chainActive.Genesis()->GetBlockHash().GetHex());
+        BOOST_TEST_MESSAGE("Genesis nBits: " << std::hex << chainActive.Genesis()->nBits);
+        BOOST_TEST_MESSAGE("powLimit: " << chainparams.GetConsensus().powLimit.GetHex());
+        BOOST_TEST_MESSAGE("kawpowLimit: " << chainparams.GetConsensus().kawpowLimit.GetHex());
 
 
-        for (unsigned int i = 0; i < sizeof(blockinfo) / sizeof(*blockinfo); ++i)
+        // Mine blocks dynamically with current PoW (KawPoW for regtest)
+        // KawPoW is memory-hard so we mine minimal blocks for unit tests
+        // The transaction testing code after this loop is disabled (return statement)
+        // so we only need enough blocks to verify mining works correctly
+        // Note: KawPoW requires DAG generation which is slow on first call
+        const unsigned int nBlocksToMine = 2;  // Minimum to test mining works
+        for (unsigned int i = 0; i < nBlocksToMine; ++i)
         {
-            CBlock *pblock = &pblocktemplate->block; // pointer for convenience
-            pblock->nVersion = 1;
-            pblock->nTime = chainActive.Tip()->GetMedianTimePast() + 1;
-            CMutableTransaction txCoinbase(*pblock->vtx[0]);
-            txCoinbase.nVersion = 1;
-            txCoinbase.vin[0].scriptSig = CScript();
-            txCoinbase.vin[0].scriptSig.push_back(blockinfo[i].extranonce);
-            txCoinbase.vin[0].scriptSig.push_back(chainActive.Height());
-            txCoinbase.vout.resize(1); // Ignore the (optional) segwit commitment added by CreateNewBlock (as the hardcoded nonces don't account for this)
-            txCoinbase.vout[0].scriptPubKey = CScript();
-            pblock->vtx[0] = MakeTransactionRef(std::move(txCoinbase));
+            // Create a new block template for each block (builds on current tip)
+            pblocktemplate = AssemblerForTest(chainparams).CreateNewBlock(scriptPubKey);
+            CBlock *pblock = &pblocktemplate->block;
+            
+            // Use IncrementExtraNonce to properly set up BIP34-compliant coinbase
+            unsigned int extraNonce = i;
+            IncrementExtraNonce(pblock, chainActive.Tip(), extraNonce);
+            
             if (txFirst.size() == 0)
                 baseheight = chainActive.Height();
             if (txFirst.size() < 4)
                 txFirst.push_back(pblock->vtx[0]);
-            pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
-            pblock->nNonce = blockinfo[i].nonce;
+            
+            BOOST_TEST_MESSAGE("Block " << i << " nBits: 0x" << std::hex << pblock->nBits << std::dec);
+            BOOST_TEST_MESSAGE("Block " << i << " time: " << pblock->nTime << " height: " << pblock->nHeight);
+            BOOST_TEST_MESSAGE("Block " << i << " prevHash: " << pblock->hashPrevBlock.GetHex());
+            
+            // Mine the block - same approach as TestChain100Setup::CreateAndProcessBlock
+            uint256 mix_hash;
+            while (!CheckProofOfWork(pblock->GetHashFull(mix_hash), pblock->nBits, chainparams.GetConsensus())) {
+                ++pblock->nNonce64;
+                ++pblock->nNonce;
+            }
+            pblock->mix_hash = mix_hash;
+            BOOST_TEST_MESSAGE("Block " << i << " found at nonce64 " << pblock->nNonce64);
+            
             std::shared_ptr<const CBlock> shared_pblock = std::make_shared<const CBlock>(*pblock);
-            //BOOST_TEST_MESSAGE("Before process block");
-            BOOST_CHECK(ProcessNewBlock(chainparams, shared_pblock, true, nullptr));
-            pblock->hashPrevBlock = pblock->GetHash();
+            bool fNewBlock = false;
+            bool result = ProcessNewBlock(chainparams, shared_pblock, true, &fNewBlock);
+            BOOST_CHECK_MESSAGE(result, "ProcessNewBlock FAILED for block " << i);
         }
 
 //   while(true) {

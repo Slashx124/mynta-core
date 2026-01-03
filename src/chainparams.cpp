@@ -696,9 +696,11 @@ public:
         nRestrictedActivationBlock = 0; // Restricted activated block height
 
         // KawPoW active immediately after genesis (genesis nTime + 1)
-        // Genesis uses X16R hash, all subsequent blocks use KawPoW
+        // MANDATORY: Regtest MUST use same PoW algorithm as mainnet
+        // KawPoW is memory-hard - unit tests must minimize block mining
+        // Mainnet, testnet, and regtest all activate KawPoW from height 1
         nKAAAWWWPOWActivationTime = nGenesisTime + 1;
-        nKAWPOWActivationTime = nKAAAWWWPOWActivationTime;
+        nKAWPOWActivationTime = nGenesisTime + 1;
         /** RVN End **/
     }
 };

@@ -205,12 +205,11 @@ inline void UnserializeTransaction(TxType& tx, Stream& s) {
 
     s >> tx.nVersion;
     
-    // For version 3+ transactions, extract type from upper 16 bits
+    // Initialize special transaction fields
+    // Note: nType and vExtraPayload are only used for Mynta special transactions
+    // and are set explicitly when creating such transactions, not extracted from version
     tx.nType = 0;
-    if (tx.nVersion >= 3) {
-        tx.nType = (tx.nVersion >> 16) & 0xFFFF;
-        tx.nVersion = tx.nVersion & 0xFFFF;
-    }
+    tx.vExtraPayload.clear();
     
     unsigned char flags = 0;
     tx.vin.clear();
@@ -240,25 +239,13 @@ inline void UnserializeTransaction(TxType& tx, Stream& s) {
         throw std::ios_base::failure("Unknown transaction optional data");
     }
     s >> tx.nLockTime;
-    
-    // Read extra payload for special transactions
-    if (tx.nVersion >= 3 && tx.nType != 0) {
-        s >> tx.vExtraPayload;
-    } else {
-        tx.vExtraPayload.clear();
-    }
 }
 
 template<typename Stream, typename TxType>
 inline void SerializeTransaction(const TxType& tx, Stream& s) {
     const bool fAllowWitness = !(s.GetVersion() & SERIALIZE_TRANSACTION_NO_WITNESS);
 
-    // For version 3+ transactions, encode type in upper 16 bits of version
-    int32_t nVersionToSerialize = tx.nVersion;
-    if (tx.nVersion >= 3 && tx.nType != 0) {
-        nVersionToSerialize |= (static_cast<int32_t>(tx.nType) << 16);
-    }
-    s << nVersionToSerialize;
+    s << tx.nVersion;
     
     unsigned char flags = 0;
     // Consistency check
@@ -282,11 +269,6 @@ inline void SerializeTransaction(const TxType& tx, Stream& s) {
         }
     }
     s << tx.nLockTime;
-    
-    // Write extra payload for special transactions
-    if (tx.nVersion >= 3 && tx.nType != 0) {
-        s << tx.vExtraPayload;
-    }
 }
 
 

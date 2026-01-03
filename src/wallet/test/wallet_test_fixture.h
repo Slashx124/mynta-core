@@ -6,7 +6,7 @@
 #ifndef MYNTA_WALLET_TEST_FIXTURE_H
 #define MYNTA_WALLET_TEST_FIXTURE_H
 
-#include "test/test_raven.h"
+#include "test/test_mynta.h"
 
 /** Testing setup and teardown for wallet.
  */
