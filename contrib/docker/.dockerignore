@@ -1,0 +1,47 @@
+# =============================================================================
+# Docker Build Context Exclusions
+# =============================================================================
+
+# Build artifacts
+*.o
+*.a
+*.lo
+*.la
+.libs/
+.deps/
+
+# Autotools generated files
+autom4te.cache/
+config.log
+config.status
+Makefile
+libtool
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git (we'll re-clone fresh)
+.git/
+.gitignore
+
+# Documentation (not needed for build)
+doc/
+*.md
+!contrib/docker/README.md
+
+# Test files
+test/
+*.test
+
+# CI/CD
+.github/
+.travis.yml
+.circleci/
+
+# Output directories
+output/
+

@@ -1,0 +1,52 @@
+# =============================================================================
+# Mynta Core Docker Compose Build Configuration
+# =============================================================================
+# 
+# Build the image:
+#   docker-compose build
+#
+# Build for specific target:
+#   docker-compose run --rm builder linux
+#   docker-compose run --rm builder windows
+#   docker-compose run --rm builder all
+#
+# =============================================================================
+
+version: '3.8'
+
+services:
+  builder:
+    build:
+      context: ../..
+      dockerfile: contrib/docker/Dockerfile
+    volumes:
+      # Output directory for built binaries
+      - ./output:/output
+      # Optional: Mount macOS SDK for cross-compilation
+      # - ./sdk/MacOSX11.3.sdk.tar.xz:/opt/osxcross/tarballs/MacOSX11.3.sdk.tar.xz:ro
+    environment:
+      - NPROC=4
+    # Default target is help
+    command: ["help"]
+
+  # Convenience services for specific targets
+  linux:
+    extends: builder
+    command: ["linux"]
+
+  windows:
+    extends: builder
+    command: ["windows"]
+
+  macos-x86_64:
+    extends: builder
+    command: ["macos-x86_64"]
+
+  macos-arm64:
+    extends: builder
+    command: ["macos-arm64"]
+
+  all:
+    extends: builder
+    command: ["all"]
+
