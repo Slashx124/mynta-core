@@ -11,6 +11,7 @@
 #include "util.h"
 
 #include <crypto/ethash/include/ethash/progpow.hpp>
+#include <mutex>
 
 //TODO remove these
 double algoHashTotal[16];
@@ -257,19 +258,18 @@ uint64_t SipHashUint256Extra(uint64_t k0, uint64_t k1, const uint256& val, uint3
 
 uint256 KAWPOWHash(const CBlockHeader& blockHeader, uint256& mix_hash)
 {
+    static std::mutex cs_context;
     static ethash::epoch_context_ptr context{nullptr, nullptr};
 
-    // Get the context from the block height
     const auto epoch_number = ethash::get_epoch_number(blockHeader.nHeight);
 
+    std::lock_guard<std::mutex> lock(cs_context);
     if (!context || context->epoch_number != epoch_number)
         context = ethash::create_epoch_context(epoch_number);
 
-    // Build the header_hash
     uint256 nHeaderHash = blockHeader.GetKAWPOWHeaderHash();
     const auto header_hash = to_hash256(nHeaderHash.GetHex());
 
-    // ProgPow hash
     const auto result = progpow::hash(*context, blockHeader.nHeight, header_hash, blockHeader.nNonce64);
 
     mix_hash = uint256S(to_hex(result.mix_hash));

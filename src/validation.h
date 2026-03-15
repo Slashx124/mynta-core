@@ -603,6 +603,8 @@ bool AreCoinbaseCheckAssetsDeployed();
 void SetEnforcedValues(bool value);
 void SetEnforcedCoinbase(bool value);
 
+void ResetDeploymentCaches();
+
 bool IsRip5Active();
 
 

@@ -142,6 +142,17 @@ struct Params {
      *  re-register.  Defaults to nTieredMNActivationHeight on all networks. */
     int nMNv2MigrationHeight{0};
     
+    /** Block height at which v1.5 consensus fixes activate.
+     *  Gated fixes: ChainLock quorum selection, 100% operator reward,
+     *  asset overflow checks, deterministic CheckAmountWithUnits,
+     *  and safe reissue overflow comparison. */
+    int nConsensusFixHeight{0};
+    
+    /** Grace period in blocks after MN activation before payment enforcement.
+     *  Allows initial masternodes time to register before blocks are rejected
+     *  for missing MN payments. */
+    int nMasternodePaymentGracePeriod{100};
+    
     // =======================================================================
     // LLMQ (Long-Living Masternode Quorum) Parameters
     // =======================================================================

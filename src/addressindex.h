@@ -11,6 +11,7 @@
 #include "script/script.h"
 
 static const std::string RVN = "RVN";
+static const std::string MYNTA_NATIVE = "MYNTA";
 
 struct CAddressUnspentKey {
     unsigned int type;

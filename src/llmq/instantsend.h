@@ -11,6 +11,7 @@
 #include "sync.h"
 #include "uint256.h"
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <set>
@@ -90,9 +91,9 @@ public:
     // The recovered threshold signature
     CBLSSignature sig;
     
-    // Cached hash
+    // Cached hash (thread-safe)
     mutable uint256 hash;
-    mutable bool hashCached{false};
+    mutable std::atomic<bool> hashCached{false};
     
 public:
     CInstantSendLock() = default;

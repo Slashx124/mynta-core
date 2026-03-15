@@ -2,6 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <cmath>
 #include <regex>
 #include <script/script.h>
 #include <version.h>
@@ -77,6 +78,7 @@ static const std::regex SUB_QUALIFIER_INDICATOR("^#[A-Z0-9._]+\\/#[A-Z0-9._]+$")
 static const std::regex RESTRICTED_INDICATOR("^[\\$][A-Z0-9._]{3,}$"); // Starts with $
 
 static const std::regex RAVEN_NAMES("^RVN$|^RAVEN$|^RAVENCOIN$|^#RVN$|^#RAVEN$|^#RAVENCOIN$");
+static const std::regex MYNTA_NAMES("^MYNTA$|^MYNTACOIN$|^#MYNTA$|^#MYNTACOIN$");
 
 bool IsRootNameValid(const std::string& name)
 {
@@ -4398,10 +4400,28 @@ bool VerifyWalletHasAsset(const std::string& asset_name, std::pair<int, std::str
 
 #endif
 
-// Return true if the amount is valid with the units passed in
-bool CheckAmountWithUnits(const CAmount& nAmount, const int8_t nUnits)
+bool CheckAmountWithUnitsLegacy(const CAmount& nAmount, const int8_t nUnits)
 {
     return nAmount % int64_t(pow(10, (MAX_UNIT - nUnits))) == 0;
+}
+
+bool CheckAmountWithUnits(const CAmount& nAmount, const int8_t nUnits)
+{
+    static const int64_t powersOf10[MAX_UNIT + 1] = {
+        1LL,         // 10^0
+        10LL,        // 10^1
+        100LL,       // 10^2
+        1000LL,      // 10^3
+        10000LL,     // 10^4
+        100000LL,    // 10^5
+        1000000LL,   // 10^6
+        10000000LL,  // 10^7
+        100000000LL, // 10^8
+    };
+    int exp = MAX_UNIT - nUnits;
+    if (exp < 0 || exp > MAX_UNIT)
+        return false;
+    return nAmount % powersOf10[exp] == 0;
 }
 
 bool CheckEncoded(const std::string& hash, std::string& strError) {
@@ -5378,6 +5398,19 @@ bool ContextualCheckNewAsset(CAssetsCache* assetCache, const CNewAsset& asset, s
     if (!CheckNewAsset(asset, strError))
         return false;
 
+    // After nConsensusFixHeight, reserve MYNTA/MYNTACOIN names to prevent
+    // confusion with the native coin.  Before the gate, these names were
+    // technically valid (only RVN/RAVEN/RAVENCOIN were reserved).
+    {
+        LOCK(cs_main);
+        if (chainActive.Height() >= GetParams().GetConsensus().nConsensusFixHeight) {
+            if (std::regex_match(asset.strName, MYNTA_NAMES)) {
+                strError = _("Invalid parameter: asset_name '") + asset.strName + _("' is reserved");
+                return false;
+            }
+        }
+    }
+
     // Check our current cache to see if the asset has been created yet
     if (assetCache->CheckIfAssetExists(asset.strName, true)) {
         strError = std::string(_("Invalid parameter: asset_name '")) + asset.strName + std::string(_("' has already been used"));
@@ -5481,10 +5514,25 @@ bool ContextualCheckReissueAsset(CAssetsCache* assetCache, const CReissueAsset& 
         return false;
     }
 
-    if (prev_asset.nAmount + reissue_asset.nAmount > MAX_MONEY) {
-        strError = _("Unable to reissue asset: asset_name '") + reissue_asset.strName +
-                   _("' the amount trying to reissue is to large");
-        return false;
+    {
+        bool fUseSafeOverflow;
+        {
+            LOCK(cs_main);
+            fUseSafeOverflow = (chainActive.Height() >= GetParams().GetConsensus().nConsensusFixHeight);
+        }
+        if (fUseSafeOverflow) {
+            if (reissue_asset.nAmount > MAX_MONEY - prev_asset.nAmount) {
+                strError = _("Unable to reissue asset: asset_name '") + reissue_asset.strName +
+                           _("' the amount trying to reissue is too large");
+                return false;
+            }
+        } else {
+            if (prev_asset.nAmount + reissue_asset.nAmount > MAX_MONEY) {
+                strError = _("Unable to reissue asset: asset_name '") + reissue_asset.strName +
+                           _("' the amount trying to reissue is too large");
+                return false;
+            }
+        }
     }
 
     if (!CheckAmountWithUnits(reissue_asset.nAmount, prev_asset.units)) {
@@ -5566,10 +5614,25 @@ bool ContextualCheckReissueAsset(CAssetsCache* assetCache, const CReissueAsset& 
             return false;
         }
 
-        if (prev_asset.nAmount + reissue_asset.nAmount > MAX_MONEY) {
-            strError = _("Unable to reissue asset: asset_name '") + reissue_asset.strName +
-                       _("' the amount trying to reissue is to large");
-            return false;
+        {
+            bool fUseSafeOverflow;
+            {
+                LOCK(cs_main);
+                fUseSafeOverflow = (chainActive.Height() >= GetParams().GetConsensus().nConsensusFixHeight);
+            }
+            if (fUseSafeOverflow) {
+                if (reissue_asset.nAmount > MAX_MONEY - prev_asset.nAmount) {
+                    strError = _("Unable to reissue asset: asset_name '") + reissue_asset.strName +
+                               _("' the amount trying to reissue is too large");
+                    return false;
+                }
+            } else {
+                if (prev_asset.nAmount + reissue_asset.nAmount > MAX_MONEY) {
+                    strError = _("Unable to reissue asset: asset_name '") + reissue_asset.strName +
+                               _("' the amount trying to reissue is too large");
+                    return false;
+                }
+            }
         }
 
         if (!CheckAmountWithUnits(reissue_asset.nAmount, prev_asset.units)) {

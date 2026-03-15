@@ -471,6 +471,9 @@ bool CheckTransferOwnerTx(const CTxOut& txOut);// OP_RAVEN_ASSET RVNT
 //! Check the Encoded hash and make sure it is either an IPFS hash or a OIP hash
 bool CheckEncoded(const std::string& hash, std::string& strError);
 
+//! Legacy floating-point version for pre-nConsensusFixHeight backward compat
+bool CheckAmountWithUnitsLegacy(const CAmount& nAmount, const int8_t nUnits);
+
 //! Checks the amount and units, and makes sure that the amount uses the correct decimals
 bool CheckAmountWithUnits(const CAmount& nAmount, const int8_t nUnits);
 

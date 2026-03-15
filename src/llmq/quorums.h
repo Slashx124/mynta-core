@@ -11,6 +11,7 @@
 #include "sync.h"
 #include "uint256.h"
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <set>
@@ -168,9 +169,9 @@ public:
     uint256 msgHash;      // The message hash that was signed
     CBLSSignature sig;    // The recovered signature
     
-    // Cached hash
+    // Cached hash (thread-safe)
     mutable uint256 hash;
-    mutable bool hashCached{false};
+    mutable std::atomic<bool> hashCached{false};
     
 public:
     CRecoveredSig() = default;
@@ -262,11 +263,12 @@ public:
     // Log quorum health metrics
     void LogQuorumHealth(const CQuorumCPtr& quorum) const;
 
-private:
     // Deterministically select members for a quorum
     std::vector<CDeterministicMNCPtr> SelectQuorumMembers(
         LLMQType type, 
         const CBlockIndex* pindex) const;
+
+private:
     
     // Score a masternode for quorum selection
     uint256 CalcMemberScore(const CDeterministicMNCPtr& mn, 
@@ -300,7 +302,7 @@ public:
     bool AsyncSign(LLMQType type, const uint256& id, const uint256& msgHash);
     
     // Process a signature share from another member
-    bool ProcessSigShare(const uint256& quorumHash, const uint256& id,
+    bool ProcessSigShare(LLMQType type, const uint256& quorumHash, const uint256& id,
                          const uint256& proTxHash, const CBLSSignature& sigShare);
     
     // Try to recover a signature

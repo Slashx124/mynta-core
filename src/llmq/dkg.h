@@ -13,6 +13,7 @@
 #include "uint256.h"
 #include "consensus/validation.h"
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <set>
@@ -87,9 +88,9 @@ public:
     // Signature over the contribution (proves authenticity)
     CBLSSignature sig;
     
-    // Cached hash
+    // Cached hash (thread-safe)
     mutable uint256 hash;
-    mutable bool hashCached{false};
+    mutable std::atomic<bool> hashCached{false};
 
 public:
     CDKGContribution() = default;
@@ -248,9 +249,9 @@ public:
     // Aggregated signature from signers confirming the commitment
     CBLSSignature membersSig;
     
-    // Cached hash
+    // Cached hash (thread-safe)
     mutable uint256 hash;
-    mutable bool hashCached{false};
+    mutable std::atomic<bool> hashCached{false};
 
 public:
     CDKGFinalCommitment() = default;
@@ -262,8 +263,10 @@ public:
     size_t CountSigners() const;
     size_t CountValidMembers() const;
     
-    // Verify the commitment
-    bool Verify(const std::vector<CDeterministicMNCPtr>& members, bool checkSigs = true) const;
+    // Verify the commitment.  nHeight is the block height at which this
+    // commitment is being validated so the correct threshold rules apply.
+    bool Verify(const std::vector<CDeterministicMNCPtr>& members, bool checkSigs = true,
+                LLMQType llmqType = LLMQType::LLMQ_50_60, int nHeight = 0) const;
     
     ADD_SERIALIZE_METHODS;
     

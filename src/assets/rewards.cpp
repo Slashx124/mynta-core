@@ -21,6 +21,17 @@
 
 std::map<uint256, CRewardSnapshot> mapRewardSnapshots;
 
+static const int64_t kPowersOf10[] = {
+    1LL, 10LL, 100LL, 1000LL, 10000LL,
+    100000LL, 1000000LL, 10000000LL, 100000000LL
+};
+
+static inline int64_t IntPow10(int exp)
+{
+    if (exp < 0 || exp > 8) return 1;
+    return kPowersOf10[exp];
+}
+
 uint256 CRewardSnapshot::GetHash() const
 {
     return SerializeHash(*this, SER_GETHASH);
@@ -67,7 +78,7 @@ bool GenerateDistributionList(const CRewardSnapshot& p_rewardSnapshot, std::vect
     //  This value is in indivisible units of the source asset
     CAmount modifiedPaymentInAssetUnits = p_rewardSnapshot.nDistributionAmount;
 
-    if (p_rewardSnapshot.strDistributionAsset != "RVN") {
+    if (p_rewardSnapshot.strDistributionAsset != "MYNTA") {
         if (!passets->GetAssetMetaDataIfExists(p_rewardSnapshot.strDistributionAsset, distributionAsset)) {
             LogPrint(BCLog::REWARDS, "%s: Failed to retrieve asset details for '%s'\n", __func__, p_rewardSnapshot.strDistributionAsset.c_str());
             return false;
@@ -78,9 +89,9 @@ bool GenerateDistributionList(const CRewardSnapshot& p_rewardSnapshot, std::vect
             srcIsIndivisible = true;
         }
 
-        srcUnitDivisor = static_cast<CAmount>(pow(10, distributionAsset.units));
+        srcUnitDivisor = IntPow10(distributionAsset.units);
 
-        CAmount srcDivisor = pow(10, COIN_DIGITS_PAST_DECIMAL - distributionAsset.units);
+        CAmount srcDivisor = IntPow10(COIN_DIGITS_PAST_DECIMAL - distributionAsset.units);
         modifiedPaymentInAssetUnits /= srcDivisor;
 
         LogPrint(BCLog::REWARDS, "%s: Distribution asset '%s' has units %d and divisor %d\n", __func__,
@@ -102,7 +113,7 @@ bool GenerateDistributionList(const CRewardSnapshot& p_rewardSnapshot, std::vect
     }
 
     //  Save the ownership asset's divisor
-    tgtUnitDivisor = static_cast<CAmount>(pow(10, COIN_DIGITS_PAST_DECIMAL - ownershipAsset.units));
+    tgtUnitDivisor = IntPow10(COIN_DIGITS_PAST_DECIMAL - ownershipAsset.units);
 
     LogPrint(BCLog::REWARDS, "%s: Ownership asset '%s' has units %d and divisor %d\n", __func__,
              p_rewardSnapshot.strOwnershipAsset.c_str(), ownershipAsset.units, tgtUnitDivisor);
@@ -151,11 +162,10 @@ bool GenerateDistributionList(const CRewardSnapshot& p_rewardSnapshot, std::vect
         // Get percentage of total ownership
         long double percent = (long double)ownership.amount / (long double)totalAmtOwned;
         // Caculate the reward with potentional unit inaccurancies e.g with units 4, 90054100 satoshis = 0.90054100
-        CAmount rewardAmt = percent * modifiedPaymentInAssetUnits * static_cast<CAmount>(pow(10, COIN_DIGITS_PAST_DECIMAL - distributionAsset.units));
-        // Remove all none accurate units e.g with units 4 90054100 => 9005
-        rewardAmt /= static_cast<CAmount>(pow(10, COIN_DIGITS_PAST_DECIMAL - distributionAsset.units));
-        // Replace all none accurate units back with zeros e.g with units 4 9005 => 90050000 satoshis = 0.90050000
-        rewardAmt *= static_cast<CAmount>(pow(10, COIN_DIGITS_PAST_DECIMAL - distributionAsset.units));
+        CAmount unitScale = IntPow10(COIN_DIGITS_PAST_DECIMAL - distributionAsset.units);
+        CAmount rewardAmt = percent * modifiedPaymentInAssetUnits * unitScale;
+        rewardAmt /= unitScale;
+        rewardAmt *= unitScale;
 
         totalSentAsRewards += rewardAmt;
 
@@ -269,8 +279,7 @@ bool BuildTransaction(
     CAmount totalPaymentAmt = 0;
 
 
-    //  Handle payouts using RVN differently from those using an asset
-    if (p_rewardSnapshot.strDistributionAsset == "RVN") {
+    if (p_rewardSnapshot.strDistributionAsset == "MYNTA") {
         // Check amount
         CAmount curBalance = p_walletPtr->GetBalance();
 

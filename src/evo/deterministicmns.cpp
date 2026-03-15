@@ -64,13 +64,7 @@ int GetMasternodeActivationHeight()
 
 int GetMasternodePaymentGracePeriod()
 {
-    // Grace period: 100 blocks (~100 minutes)
-    // This allows initial masternodes to register before enforcement
-    // On regtest, use a shorter period for testing
-    if (GetParams().MineBlocksOnDemand()) {
-        return 10;  // 10 blocks for regtest
-    }
-    return 100;  // 100 blocks for mainnet/testnet
+    return GetParams().GetConsensus().nMasternodePaymentGracePeriod;
 }
 
 // ============================================================================

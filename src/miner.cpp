@@ -245,9 +245,18 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock(const CScript& sc
                 }
             }
             
-            // Owner gets the remainder
-            nMasternodePayment = nTotalMNPayment - nOperatorPayment;
-            masternodePayoutScript = payee->state.scriptPayout;
+            // After nConsensusFixHeight, when operator gets 100%, send the
+            // full payment to the operator script (no separate owner output).
+            if (nHeight >= consensusParams.nConsensusFixHeight &&
+                payee->nOperatorReward == 10000 && !payee->state.scriptOperatorPayout.empty()) {
+                nMasternodePayment = nTotalMNPayment;
+                masternodePayoutScript = payee->state.scriptOperatorPayout;
+                nOperatorPayment = 0;
+                bOperatorPayment = false;
+            } else {
+                nMasternodePayment = nTotalMNPayment - nOperatorPayment;
+                masternodePayoutScript = payee->state.scriptPayout;
+            }
             bMasternodePayment = true;
             
             CTxDestination payoutDest;

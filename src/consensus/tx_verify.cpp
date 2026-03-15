@@ -15,7 +15,6 @@
 #include "script/interpreter.h"
 #include "validation.h"
 #include <cmath>
-#include <wallet/wallet.h>
 #include <base58.h>
 #include <tinyformat.h>
 
@@ -604,7 +603,7 @@ bool Consensus::CheckTxInputs(const CTransaction& tx, CValidationState& state, c
 }
 
 //! Check to make sure that the inputs and outputs CAmount match exactly.
-bool Consensus::CheckTxAssets(const CTransaction& tx, CValidationState& state, const CCoinsViewCache& inputs, CAssetsCache* assetCache, bool fCheckMempool, std::vector<std::pair<std::string, uint256> >& vPairReissueAssets, const bool fRunningUnitTests, std::set<CMessage>* setMessages, int64_t nBlocktime,   std::vector<std::pair<std::string, CNullAssetTxData>>* myNullAssetData)
+bool Consensus::CheckTxAssets(const CTransaction& tx, CValidationState& state, const CCoinsViewCache& inputs, CAssetsCache* assetCache, bool fCheckMempool, std::vector<std::pair<std::string, uint256> >& vPairReissueAssets, const bool fRunningUnitTests, std::set<CMessage>* setMessages, int64_t nBlocktime,   std::vector<std::pair<std::string, CNullAssetTxData>>* myNullAssetData, int nSpendHeight)
 {
     // are the actual inputs available?
     if (!inputs.HaveInputs(tx)) {
@@ -627,11 +626,16 @@ bool Consensus::CheckTxAssets(const CTransaction& tx, CValidationState& state, c
             if (!GetAssetData(coin.out.scriptPubKey, data))
                 return state.DoS(100, false, REJECT_INVALID, "bad-txns-failed-to-get-asset-from-script", false, "", tx.GetHash());
 
-            // Add to the total value of assets in the inputs
-            if (totalInputs.count(data.assetName))
+            if (totalInputs.count(data.assetName)) {
                 totalInputs.at(data.assetName) += data.nAmount;
-            else
+                int nCheckHeight = (nSpendHeight > 0) ? nSpendHeight : chainActive.Height();
+                if (nCheckHeight >= GetParams().GetConsensus().nConsensusFixHeight &&
+                    !MoneyRange(totalInputs.at(data.assetName))) {
+                    return state.DoS(100, false, REJECT_INVALID, "bad-txns-asset-inputs-overflow", false, "", tx.GetHash());
+                }
+            } else {
                 totalInputs.insert(make_pair(data.assetName, data.nAmount));
+            }
 
             if (AreMessagesDeployed()) {
                 mapAddresses.insert(make_pair(data.assetName,EncodeDestination(data.destination)));
@@ -645,10 +649,14 @@ bool Consensus::CheckTxAssets(const CTransaction& tx, CValidationState& state, c
         }
     }
 
-    // Create map that stores the amount of an asset transaction output. Used to verify no assets are burned
     std::map<std::string, CAmount> totalOutputs;
     int index = 0;
-    int64_t currentTime = GetTime();
+    int64_t currentTime;
+    {
+        int nCheckHeight = (nSpendHeight > 0) ? nSpendHeight : chainActive.Height();
+        bool fUseBlockTime = (nCheckHeight >= GetParams().GetConsensus().nConsensusFixHeight);
+        currentTime = (fUseBlockTime && nBlocktime > 0) ? nBlocktime : GetTime();
+    }
     std::string strError = "";
     int i = 0;
     for (const auto& txout : tx.vout) {
@@ -692,11 +700,16 @@ bool Consensus::CheckTxAssets(const CTransaction& tx, CValidationState& state, c
             if (!ContextualCheckTransferAsset(assetCache, transfer, address, strError))
                 return state.DoS(100, false, REJECT_INVALID, strError, false, "", tx.GetHash());
 
-            // Add to the total value of assets in the outputs
-            if (totalOutputs.count(transfer.strName))
+            if (totalOutputs.count(transfer.strName)) {
                 totalOutputs.at(transfer.strName) += transfer.nAmount;
-            else
+                int nCheckHeight = (nSpendHeight > 0) ? nSpendHeight : chainActive.Height();
+                if (nCheckHeight >= GetParams().GetConsensus().nConsensusFixHeight &&
+                    !MoneyRange(totalOutputs.at(transfer.strName))) {
+                    return state.DoS(100, false, REJECT_INVALID, "bad-txns-asset-outputs-overflow", false, "", tx.GetHash());
+                }
+            } else {
                 totalOutputs.insert(make_pair(transfer.strName, transfer.nAmount));
+            }
 
             if (!fRunningUnitTests) {
                 if (IsAssetNameAnOwner(transfer.strName)) {
@@ -711,8 +724,14 @@ bool Consensus::CheckTxAssets(const CTransaction& tx, CValidationState& state, c
                     if (asset.strName != transfer.strName)
                         return state.DoS(100, false, REJECT_INVALID, "bad-txns-asset-database-corrupted", false, "", tx.GetHash());
 
-                    if (!CheckAmountWithUnits(transfer.nAmount, asset.units))
-                        return state.DoS(100, false, REJECT_INVALID, "bad-txns-transfer-asset-amount-not-match-units", false, "", tx.GetHash());
+                    {
+                        int nCheckHeight = (nSpendHeight > 0) ? nSpendHeight : chainActive.Height();
+                        bool fUseNew = (nCheckHeight >= GetParams().GetConsensus().nConsensusFixHeight);
+                        bool fAmountOk = fUseNew ? CheckAmountWithUnits(transfer.nAmount, asset.units)
+                                                 : CheckAmountWithUnitsLegacy(transfer.nAmount, asset.units);
+                        if (!fAmountOk)
+                            return state.DoS(100, false, REJECT_INVALID, "bad-txns-transfer-asset-amount-not-match-units", false, "", tx.GetHash());
+                    }
                 }
             }
 
@@ -741,11 +760,16 @@ bool Consensus::CheckTxAssets(const CTransaction& tx, CValidationState& state, c
             if (!ReissueAssetFromScript(txout.scriptPubKey, reissue, address))
                 return state.DoS(100, false, REJECT_INVALID, "bad-tx-asset-reissue-bad-deserialize", false, "", tx.GetHash());
 
-            if (mapReissuedAssets.count(reissue.strName)) {
-                if (mapReissuedAssets.at(reissue.strName) != tx.GetHash())
-                    return state.DoS(100, false, REJECT_INVALID, "bad-tx-reissue-chaining-not-allowed", false, "", tx.GetHash());
-            } else {
-                vPairReissueAssets.emplace_back(std::make_pair(reissue.strName, tx.GetHash()));
+            {
+                int nCheckHeight = (nSpendHeight > 0) ? nSpendHeight : chainActive.Height();
+                bool fGateActive = (nCheckHeight >= GetParams().GetConsensus().nConsensusFixHeight);
+                bool fCheckReissueMap = fGateActive ? fCheckMempool : true;
+                if (fCheckReissueMap && mapReissuedAssets.count(reissue.strName)) {
+                    if (mapReissuedAssets.at(reissue.strName) != tx.GetHash())
+                        return state.DoS(100, false, REJECT_INVALID, "bad-tx-reissue-chaining-not-allowed", false, "", tx.GetHash());
+                } else {
+                    vPairReissueAssets.emplace_back(std::make_pair(reissue.strName, tx.GetHash()));
+                }
             }
         }
         index++;

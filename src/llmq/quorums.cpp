@@ -186,11 +186,11 @@ std::string CQuorum::ToString() const
 
 uint256 CRecoveredSig::GetHash() const
 {
-    if (!hashCached) {
+    if (!hashCached.load(std::memory_order_acquire)) {
         CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
         hw << *this;
         hash = hw.GetHash();
-        hashCached = true;
+        hashCached.store(true, std::memory_order_release);
     }
     return hash;
 }
@@ -297,14 +297,32 @@ CQuorumCPtr CQuorumManager::BuildQuorum(LLMQType type, const CBlockIndex* pindex
         quorum->members.push_back(member);
     }
     
-    // Aggregate public key
-    if (!memberPubKeys.empty()) {
+    // Derive quorum public key.
+    // After nConsensusFixHeight, prefer the DKG-derived threshold public key
+    // from the final commitment (first element of the verification vector).
+    // Before that, fall back to naive aggregation for backward compatibility.
+    const auto& cp = GetParams().GetConsensus();
+    bool usedDKGKey = false;
+    if (pindex->nHeight >= cp.nConsensusFixHeight && dkgSessionManager) {
+        CDKGFinalCommitment commitment;
+        if (dkgSessionManager->GetFinalCommitment(quorumHash, commitment) &&
+            commitment.quorumPublicKey.IsValid()) {
+            quorum->quorumPublicKey = commitment.quorumPublicKey;
+            usedDKGKey = true;
+        }
+    }
+    if (!usedDKGKey && !memberPubKeys.empty()) {
         quorum->quorumPublicKey = CBLSPublicKey::AggregatePublicKeys(memberPubKeys);
     }
     
     quorum->fValid = (quorum->validMemberCount >= params.minSize);
     
-    // Cache
+    // Evict oldest cache entries to bound memory usage
+    static const size_t MAX_QUORUM_CACHE = 256;
+    while (quorumCache.size() >= MAX_QUORUM_CACHE) {
+        quorumCache.erase(quorumCache.begin());
+    }
+    
     quorumCache[key] = quorum;
     
     LogPrintf("CQuorumManager::%s -- Built quorum: %s\n", __func__, quorum->ToString());
@@ -703,6 +721,7 @@ bool CSigningManager::AsyncSign(LLMQType type, const uint256& id, const uint256&
 }
 
 bool CSigningManager::ProcessSigShare(
+    LLMQType type,
     const uint256& quorumHash,
     const uint256& id,
     const uint256& proTxHash,
@@ -730,7 +749,7 @@ bool CSigningManager::ProcessSigShare(
         
         // Get member's public key for verification
         LOCK(cs_main);
-        auto quorum = quorumManager.GetQuorum(LLMQType::LLMQ_50_60, quorumHash);
+        auto quorum = quorumManager.GetQuorum(type, quorumHash);
         if (quorum) {
             int memberIdx = quorum->GetMemberIndex(proTxHash);
             if (memberIdx >= 0 && memberIdx < static_cast<int>(quorum->members.size())) {

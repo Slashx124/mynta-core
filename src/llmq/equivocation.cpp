@@ -4,6 +4,7 @@
 
 #include "llmq/equivocation.h"
 #include "llmq/monitoring.h"
+#include "bls/bls.h"
 #include "evo/pose.h"
 #include "chainparams.h"
 #include "hash.h"
@@ -57,15 +58,33 @@ bool CEquivocationProof::Verify() const
         return false;
     }
     
-    // Verify both signatures
-    if (!sig1.VerifyInsecure(memberPubKey, msgHash1)) {
-        LogPrintf("CEquivocationProof::Verify -- signature 1 verification failed\n");
-        return false;
+    // After nConsensusFixHeight use domain-separated verification (matches
+    // SignWithDomain used in quorum signing).  Before the gate, fall back to
+    // VerifyInsecure so proofs created by earlier code still validate.
+    bool fUseDomain = false;
+    {
+        LOCK(cs_main);
+        fUseDomain = (chainActive.Height() >= GetParams().GetConsensus().nConsensusFixHeight);
     }
-    
-    if (!sig2.VerifyInsecure(memberPubKey, msgHash2)) {
-        LogPrintf("CEquivocationProof::Verify -- signature 2 verification failed\n");
-        return false;
+
+    if (fUseDomain) {
+        if (!sig1.VerifyWithDomain(memberPubKey, msgHash1, BLSDomainTags::QUORUM)) {
+            LogPrintf("CEquivocationProof::Verify -- signature 1 verification failed\n");
+            return false;
+        }
+        if (!sig2.VerifyWithDomain(memberPubKey, msgHash2, BLSDomainTags::QUORUM)) {
+            LogPrintf("CEquivocationProof::Verify -- signature 2 verification failed\n");
+            return false;
+        }
+    } else {
+        if (!sig1.VerifyInsecure(memberPubKey, msgHash1)) {
+            LogPrintf("CEquivocationProof::Verify -- signature 1 verification failed\n");
+            return false;
+        }
+        if (!sig2.VerifyInsecure(memberPubKey, msgHash2)) {
+            LogPrintf("CEquivocationProof::Verify -- signature 2 verification failed\n");
+            return false;
+        }
     }
     
     return true;

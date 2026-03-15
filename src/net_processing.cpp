@@ -2948,7 +2948,14 @@ bool static ProcessMessage(CNode* pfrom, const std::string& strCommand, CDataStr
             
             vRecv >> quorumHash >> id >> proTxHash >> sigShare;
             
-            if (llmq::signingManager->ProcessSigShare(quorumHash, id, proTxHash, sigShare)) {
+            bool processed = false;
+            for (auto tryType : {llmq::LLMQType::LLMQ_50_60, llmq::LLMQType::LLMQ_400_60}) {
+                if (llmq::signingManager->ProcessSigShare(tryType, quorumHash, id, proTxHash, sigShare)) {
+                    processed = true;
+                    break;
+                }
+            }
+            if (processed) {
                 LogPrint(BCLog::NET, "LLMQ: Processed signature share from peer=%d\n", pfrom->GetId());
             }
         }

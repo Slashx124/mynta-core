@@ -12,6 +12,7 @@
 #include "util.h"
 #include "validation.h"
 
+#include <algorithm>
 #include <sstream>
 
 namespace llmq {
@@ -25,11 +26,11 @@ std::unique_ptr<CInstantSendManager> instantSendManager;
 
 uint256 CInstantSendLock::GetHash() const
 {
-    if (!hashCached) {
+    if (!hashCached.load(std::memory_order_acquire)) {
         CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
         hw << *this;
         hash = hw.GetHash();
-        hashCached = true;
+        hashCached.store(true, std::memory_order_release);
     }
     return hash;
 }
@@ -38,8 +39,24 @@ uint256 CInstantSendLock::GetRequestId() const
 {
     CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
     hw << std::string("islock_request");
-    for (const auto& input : inputs) {
-        hw << input;
+
+    const auto& cp = GetParams().GetConsensus();
+    bool fSort = false;
+    {
+        LOCK(cs_main);
+        fSort = (chainActive.Height() >= cp.nConsensusFixHeight);
+    }
+
+    if (fSort) {
+        std::vector<COutPoint> sortedInputs = inputs;
+        std::sort(sortedInputs.begin(), sortedInputs.end());
+        for (const auto& input : sortedInputs) {
+            hw << input;
+        }
+    } else {
+        for (const auto& input : inputs) {
+            hw << input;
+        }
     }
     return hw.GetHash();
 }
@@ -512,15 +529,26 @@ uint256 CInstantSendManager::CreateRequestId(const std::vector<COutPoint>& input
 {
     CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
     hw << std::string("islock_request");
-    
-    // Sort inputs for determinism
-    std::vector<COutPoint> sortedInputs = inputs;
-    std::sort(sortedInputs.begin(), sortedInputs.end());
-    
-    for (const auto& input : sortedInputs) {
-        hw << input;
+
+    const auto& cp = GetParams().GetConsensus();
+    bool fSort = false;
+    {
+        LOCK(cs_main);
+        fSort = (chainActive.Height() >= cp.nConsensusFixHeight);
     }
-    
+
+    if (fSort) {
+        std::vector<COutPoint> sortedInputs = inputs;
+        std::sort(sortedInputs.begin(), sortedInputs.end());
+        for (const auto& input : sortedInputs) {
+            hw << input;
+        }
+    } else {
+        for (const auto& input : inputs) {
+            hw << input;
+        }
+    }
+
     return hw.GetHash();
 }
 

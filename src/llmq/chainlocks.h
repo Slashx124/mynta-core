@@ -11,6 +11,7 @@
 #include "sync.h"
 #include "uint256.h"
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <set>
@@ -118,9 +119,9 @@ public:
     uint256 blockHash;       // Block hash at this height
     CBLSSignature sig;       // Quorum threshold signature
     
-    // Cached hash
+    // Cached hash (thread-safe via atomic flag)
     mutable uint256 hash;
-    mutable bool hashCached{false};
+    mutable std::atomic<bool> hashCached{false};
 
 public:
     CChainLockSig() = default;

@@ -881,8 +881,8 @@ UniValue getaddressutxos(const JSONRPCRequest& request)
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Unknown address type");
         }
 
-        std::string assetNameOut = "RVN";
-        if (assetName != "RVN") {
+        std::string assetNameOut = RVN;
+        if (assetName != RVN) {
             CAmount _amount;
             if (!GetAssetInfoFromScript(it->second.script, assetNameOut, _amount)) {
                 throw JSONRPCError(RPC_INTERNAL_ERROR, "Couldn't decode asset script");

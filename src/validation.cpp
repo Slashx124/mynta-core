@@ -2492,31 +2492,22 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
     // Now that the whole chain is irreversibly beyond that time it is applied to all blocks except the
     // two in the chain that violate it. This prevents exploiting the issue against nodes during their
     // initial block download.
-    // bool fEnforceBIP30 = (!pindex->phashBlock) || // Enforce on CreateNewBlock invocations which don't have a hash.
-    //                       !((pindex->nHeight==91842 && pindex->GetBlockHash() == uint256S("0x00000000000a4d0a398161ffc163c503763b1f4360639393e0e4c8e300e0caec")) ||
-    //                        (pindex->nHeight==91880 && pindex->GetBlockHash() == uint256S("0x00000000000743f190a18c5577a3c2d2a1f610ae9601ac046a38084ccb7cd721")));
+    // BIP30: Prevent transaction ID collisions.
+    // Mynta has no legacy duplicate coinbase exceptions (those were Bitcoin-specific).
+    // Enforce unconditionally after nConsensusFixHeight; before that, skip to match
+    // the behavior nodes were running when the existing chain was built.
+    bool fEnforceBIP30 = (pindex->nHeight >= chainparams.GetConsensus().nConsensusFixHeight);
 
-    // Once BIP34 activated it was not possible to create new duplicate coinbases and thus other than starting
-    // with the 2 existing duplicate coinbase pairs, not possible to create overwriting txs.  But by the
-    // time BIP34 activated, in each of the existing pairs the duplicate coinbase had overwritten the first
-    // before the first had been spent.  Since those coinbases are sufficiently buried its no longer possible to create further
-    // duplicate transactions descending from the known pairs either.
-    // If we're on the known chain at height greater than where BIP34 activated, we can save the db accesses needed for the BIP30 check.
-    // assert(pindex->pprev);
-    // CBlockIndex *pindexBIP34height = pindex->pprev->GetAncestor(chainparams.GetConsensus().BIP34Height);
-    // //Only continue to enforce if we're below BIP34 activation height or the block hash at that height doesn't correspond.
-    // fEnforceBIP30 = fEnforceBIP30 && (!pindexBIP34height || !(pindexBIP34height->GetBlockHash() == chainparams.GetConsensus().BIP34Hash));
-
-    // if (fEnforceBIP30) {
-    //     for (const auto& tx : block.vtx) {
-    //         for (size_t o = 0; o < tx->vout.size(); o++) {
-    //             if (view.HaveCoin(COutPoint(tx->GetHash(), o))) {
-    //                 return state.DoS(100, error("ConnectBlock(): tried to overwrite transaction"),
-    //                                  REJECT_INVALID, "bad-txns-BIP30");
-    //             }
-    //         }
-    //     }
-    // }
+    if (fEnforceBIP30) {
+        for (const auto& tx : block.vtx) {
+            for (size_t o = 0; o < tx->vout.size(); o++) {
+                if (view.HaveCoin(COutPoint(tx->GetHash(), o))) {
+                    return state.DoS(100, error("ConnectBlock(): tried to overwrite transaction"),
+                                     REJECT_INVALID, "bad-txns-BIP30");
+                }
+            }
+        }
+    }
 
     // Start enforcing BIP68 (sequence locks) and BIP112 (CHECKSEQUENCEVERIFY) using versionbits logic.
     int nLockTimeFlags = 0;
@@ -2611,7 +2602,7 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
 
             if (AreAssetsDeployed()) {
                 std::vector<std::pair<std::string, uint256>> vReissueAssets;
-                if (!Consensus::CheckTxAssets(tx, state, view, assetsCache, false, vReissueAssets, false, &setMessages, block.nTime, &myNullAssetData)) {
+                if (!Consensus::CheckTxAssets(tx, state, view, assetsCache, false, vReissueAssets, false, &setMessages, block.nTime, &myNullAssetData, pindex->nHeight)) {
                     state.SetFailedTransaction(tx.GetHash());
                     return error("%s: Consensus::CheckTxAssets: %s, %s", __func__, tx.GetHash().ToString(),
                                  FormatStateMessage(state));
@@ -2837,11 +2828,16 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         CAmount nActualDevAmount = 0;
         
         const CTransaction& coinbase = *block.vtx[0];
+        bool fSumOutputs = (pindex->nHeight >= chainparams.GetConsensus().nConsensusFixHeight);
         for (const CTxOut& out : coinbase.vout) {
             if (Consensus::IsValidDevScript(out.scriptPubKey, pindex->nHeight)) {
                 fFoundDevOutput = true;
-                nActualDevAmount = out.nValue;
-                break;
+                if (fSumOutputs) {
+                    nActualDevAmount += out.nValue;
+                } else {
+                    nActualDevAmount = out.nValue;
+                    break;
+                }
             }
         }
         
@@ -3287,6 +3283,9 @@ bool static DisconnectTip(CValidationState& state, const CChainParams& chainpara
         assert(assetsFlushed);
     }
     LogPrint(BCLog::BENCH, "- Disconnect block: %.2fms\n", (GetTimeMicros() - nStart) * MILLI);
+
+    ResetDeploymentCaches();
+
     // Write the chain state to disk, if necessary.
     if (!FlushStateToDisk(chainparams, state, FLUSH_STATE_IF_NEEDED))
         return false;
@@ -4451,20 +4450,31 @@ static bool ContextualCheckBlock(const CBlock& block, CValidationState& state, c
             bool foundMNPayment = false;
             const CTransaction& coinbaseTx = *block.vtx[0];
             
-            // Track what we found for detailed error logging
             CAmount foundAmount = 0;
             bool foundScript = false;
             
+            // Compute operator split so we know the owner's expected share.
+            // Before nConsensusFixHeight: legacy path checks full amount to scriptPayout.
+            // After nConsensusFixHeight: correctly splits owner/operator and handles
+            // the 100% operator case via GetPayoutScript().
+            CAmount operatorPayment = 0;
+            CAmount expectedOwnerPayment = expectedMNPayment;
+            CScript expectedScript = expectedPayee->state.scriptPayout;
+            
+            if (nHeight >= consensusParams.nConsensusFixHeight) {
+                if (expectedPayee->nOperatorReward > 0 && !expectedPayee->state.scriptOperatorPayout.empty()) {
+                    operatorPayment = expectedMNPayment * expectedPayee->nOperatorReward / 10000;
+                }
+                expectedOwnerPayment = expectedMNPayment - operatorPayment;
+                expectedScript = expectedPayee->state.GetPayoutScript(expectedPayee->nOperatorReward);
+            }
+            
             for (const CTxOut& out : coinbaseTx.vout) {
-                // Check if output goes to correct masternode payout script
-                // CRITICAL: Use the scriptPayout from the list at pindexPrev,
-                // NOT any potentially updated script from a later state
-                if (out.scriptPubKey == expectedPayee->state.scriptPayout) {
+                if (out.scriptPubKey == expectedScript) {
                     foundScript = true;
                     foundAmount = out.nValue;
                     
-                    // Allow payment >= expected (miner can optionally tip)
-                    if (out.nValue >= expectedMNPayment) {
+                    if (out.nValue >= expectedOwnerPayment) {
                         foundMNPayment = true;
                         LogPrint(BCLog::MASTERNODE, "ContextualCheckBlock: Found MN payment of %s to %s\n",
                                  FormatMoney(out.nValue), expectedPayee->proTxHash.ToString().substr(0, 16));
@@ -4477,7 +4487,7 @@ static bool ContextualCheckBlock(const CBlock& block, CValidationState& state, c
                 std::string detail;
                 if (foundScript) {
                     detail = strprintf("payment amount too low (%s < %s)",
-                                      FormatMoney(foundAmount), FormatMoney(expectedMNPayment));
+                                      FormatMoney(foundAmount), FormatMoney(expectedOwnerPayment));
                 } else {
                     detail = "no payment to correct script found";
                 }
@@ -4487,7 +4497,7 @@ static bool ContextualCheckBlock(const CBlock& block, CValidationState& state, c
                           expectedPayee->proTxHash.ToString(),
                           GetTierName(expectedPayee->state.nTier),
                           HexStr(expectedPayee->state.scriptPayout.begin(), expectedPayee->state.scriptPayout.end()));
-                LogPrintf("  Expected amount: >= %s\n", FormatMoney(expectedMNPayment));
+                LogPrintf("  Expected amount: >= %s\n", FormatMoney(expectedOwnerPayment));
                 LogPrintf("  Coinbase outputs (%zu):\n", coinbaseTx.vout.size());
                 for (size_t idx = 0; idx < coinbaseTx.vout.size(); idx++) {
                     LogPrintf("    vout[%zu]: value=%s script=%s\n", idx,
@@ -4499,21 +4509,25 @@ static bool ContextualCheckBlock(const CBlock& block, CValidationState& state, c
                 return state.DoS(100, false, REJECT_INVALID, "bad-cb-mn-payment", false,
                     strprintf("invalid masternode payment: %s (expected >= %s to MN %s)",
                               detail,
-                              FormatMoney(expectedMNPayment),
+                              FormatMoney(expectedOwnerPayment),
                               expectedPayee->proTxHash.ToString().substr(0, 16)));
             }
             
-            // Enforce operator reward split after tiered MN activation
-            if (expectedPayee->nOperatorReward > 0 && !expectedPayee->state.scriptOperatorPayout.empty()) {
-                CAmount operatorPayment = expectedMNPayment * expectedPayee->nOperatorReward / 10000;
-                if (operatorPayment > 0) {
-                    const auto& cp = GetParams().GetConsensus();
-                    bool bEnforce = (nHeight >= cp.nTieredMNActivationHeight);
+            // Enforce operator reward split.
+            // After nConsensusFixHeight with nOperatorReward == 10000 (100%),
+            // the full payment was already validated to the operator script above.
+            bool skipOperatorCheck = (nHeight >= consensusParams.nConsensusFixHeight &&
+                                      expectedPayee->nOperatorReward == 10000);
+            if (!skipOperatorCheck &&
+                expectedPayee->nOperatorReward > 0 && !expectedPayee->state.scriptOperatorPayout.empty()) {
+                CAmount opPayment = expectedMNPayment * expectedPayee->nOperatorReward / 10000;
+                if (opPayment > 0) {
+                    bool bEnforce = (nHeight >= consensusParams.nTieredMNActivationHeight);
                     
                     bool foundOperatorPayment = false;
                     for (const CTxOut& out : coinbaseTx.vout) {
                         if (out.scriptPubKey == expectedPayee->state.scriptOperatorPayout && 
-                            out.nValue >= operatorPayment) {
+                            out.nValue >= opPayment) {
                             foundOperatorPayment = true;
                             break;
                         }
@@ -4522,11 +4536,11 @@ static bool ContextualCheckBlock(const CBlock& block, CValidationState& state, c
                         if (bEnforce) {
                             return state.DoS(100, false, REJECT_INVALID, "bad-cb-mn-operator-payment", false,
                                 strprintf("missing operator payment of %s to MN %s",
-                                          FormatMoney(operatorPayment),
+                                          FormatMoney(opPayment),
                                           expectedPayee->proTxHash.ToString().substr(0, 16)));
                         }
                         LogPrint(BCLog::MASTERNODE, "ContextualCheckBlock: Missing operator payment of %s (pre-enforcement)\n",
-                                 FormatMoney(operatorPayment));
+                                 FormatMoney(opPayment));
                     }
                 }
             }
@@ -6070,6 +6084,15 @@ void SetEnforcedValues(bool value) {
 void SetEnforcedCoinbase(bool value)
 {
     fCheckCoinbaseAssetsIsActive = value;
+}
+
+void ResetDeploymentCaches()
+{
+    fEnforcedValuesIsActive = false;
+    fCheckCoinbaseAssetsIsActive = false;
+    fAssetsIsActive = false;
+    fRip5IsActive = false;
+    fTransferScriptIsActive = false;
 }
 
 bool AreEnforcedValuesDeployed()

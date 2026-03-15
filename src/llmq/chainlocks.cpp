@@ -34,11 +34,11 @@ const std::string CChainLocksManager::DB_CHAINLOCK_ACTIVATION_HEIGHT = "clsig_ac
 
 uint256 CChainLockSig::GetHash() const
 {
-    if (!hashCached) {
+    if (!hashCached.load(std::memory_order_acquire)) {
         CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
         hw << *this;
         hash = hw.GetHash();
-        hashCached = true;
+        hashCached.store(true, std::memory_order_release);
     }
     return hash;
 }
@@ -720,11 +720,15 @@ bool CChainLocksManager::VerifyChainLock(const CChainLockSig& clsig) const
         return false;
     }
     
-    // Get the quorum for this height
     LOCK(cs_main);
-    const CBlockIndex* pindex = chainActive[clsig.nHeight - 1];
+    const auto& cp = GetParams().GetConsensus();
+    const CBlockIndex* pindex;
+    if (clsig.nHeight >= cp.nConsensusFixHeight) {
+        pindex = chainActive[clsig.nHeight];
+    } else {
+        pindex = chainActive[clsig.nHeight - 1];
+    }
     if (!pindex) {
-        // Use tip if we don't have exact height
         pindex = chainActive.Tip();
     }
     

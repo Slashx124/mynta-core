@@ -283,11 +283,11 @@ static bool AEADDecrypt(const std::vector<uint8_t>& ciphertext,
 
 uint256 CDKGContribution::GetHash() const
 {
-    if (!hashCached) {
+    if (!hashCached.load(std::memory_order_acquire)) {
         CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
         hw << *this;
         hash = hw.GetHash();
-        hashCached = true;
+        hashCached.store(true, std::memory_order_release);
     }
     return hash;
 }
@@ -409,11 +409,11 @@ uint256 CDKGPrematureCommitment::GetSignHash() const
 
 uint256 CDKGFinalCommitment::GetHash() const
 {
-    if (!hashCached) {
+    if (!hashCached.load(std::memory_order_acquire)) {
         CHashWriter hw(SER_GETHASH, PROTOCOL_VERSION);
         hw << *this;
         hash = hw.GetHash();
-        hashCached = true;
+        hashCached.store(true, std::memory_order_release);
     }
     return hash;
 }
@@ -440,7 +440,8 @@ size_t CDKGFinalCommitment::CountValidMembers() const
     return std::count(validMembers.begin(), validMembers.end(), true);
 }
 
-bool CDKGFinalCommitment::Verify(const std::vector<CDeterministicMNCPtr>& members, bool checkSigs) const
+bool CDKGFinalCommitment::Verify(const std::vector<CDeterministicMNCPtr>& members, bool checkSigs,
+                                 LLMQType llmqType, int nHeight) const
 {
     if (quorumHash.IsNull()) return false;
     if (signers.size() != members.size()) return false;
@@ -451,8 +452,24 @@ bool CDKGFinalCommitment::Verify(const std::vector<CDeterministicMNCPtr>& member
     size_t signerCount = CountSigners();
     size_t validCount = CountValidMembers();
     
-    // Must have minimum signers
-    const auto& params = GetLLMQParams(LLMQType::LLMQ_50_60); // TODO: parameterize
+    // Before nConsensusFixHeight the threshold was always computed against
+    // LLMQ_50_60 regardless of the actual quorum type (legacy bug).
+    // Preserve that behaviour for commitments created before the gate.
+    // Use the explicit nHeight when provided; fall back to chainActive only
+    // as a last resort so that block-validation contexts are deterministic
+    // regardless of the current tip (important during IBD).
+    LLMQType effectiveType = llmqType;
+    {
+        int checkHeight = nHeight;
+        if (checkHeight <= 0) {
+            LOCK(cs_main);
+            checkHeight = chainActive.Height();
+        }
+        if (checkHeight < GetParams().GetConsensus().nConsensusFixHeight) {
+            effectiveType = LLMQType::LLMQ_50_60;
+        }
+    }
+    const auto& params = GetLLMQParams(effectiveType);
     size_t minSigners = (members.size() * params.threshold + 99) / 100;
     
     if (signerCount < minSigners) {
@@ -1471,7 +1488,7 @@ bool CDKGSession::ProcessFinalCommitment(const CDKGFinalCommitment& commitment, 
         return state.DoS(100, false, REJECT_INVALID, "bad-dkg-quorum-hash");
     }
     
-    if (!commitment.Verify(members, true)) {
+    if (!commitment.Verify(members, true, llmqType, quorumHeight)) {
         return state.DoS(100, false, REJECT_INVALID, "bad-dkg-final-commitment");
     }
     
@@ -1590,32 +1607,40 @@ bool CDKGSessionManager::StartSession(LLMQType llmqType, const CBlockIndex* pind
         return false;
     }
     
-    // Get members for this quorum
-    auto mnList = deterministicMNManager->GetListForBlock(pindex);
-    if (!mnList) return false;
-    
+    // Select members using the same deterministic algorithm as BuildQuorum.
+    // Before nConsensusFixHeight, use the legacy Hash(quorumHash, proTxHash) sort
+    // for backward compatibility with existing quorum sessions.
+    // After nConsensusFixHeight, use SelectQuorumMembers which matches BuildQuorum.
+    const auto& cp = GetParams().GetConsensus();
     std::vector<CDeterministicMNCPtr> members;
-    mnList->ForEachMN(true, [&](const CDeterministicMNCPtr& mn) {
-        members.push_back(mn);
-    });
+    
+    if (pindex->nHeight >= cp.nConsensusFixHeight) {
+        members = quorumManager.SelectQuorumMembers(llmqType, pindex);
+    } else {
+        auto mnList = deterministicMNManager->GetListForBlock(pindex);
+        if (!mnList) return false;
+        
+        mnList->ForEachMN(true, [&](const CDeterministicMNCPtr& mn) {
+            members.push_back(mn);
+        });
+        
+        std::sort(members.begin(), members.end(), [&](const auto& a, const auto& b) {
+            CHashWriter hw1(SER_GETHASH, 0);
+            hw1 << quorumHash << a->proTxHash;
+            CHashWriter hw2(SER_GETHASH, 0);
+            hw2 << quorumHash << b->proTxHash;
+            return hw1.GetHash() < hw2.GetHash();
+        });
+        
+        if (members.size() > static_cast<size_t>(params.size)) {
+            members.resize(params.size);
+        }
+    }
     
     if (members.size() < static_cast<size_t>(params.minSize)) {
         LogPrintf("CDKGSessionManager::StartSession -- not enough members: %zu < %d\n",
                   members.size(), params.minSize);
         return false;
-    }
-    
-    // Sort and limit to quorum size
-    std::sort(members.begin(), members.end(), [&](const auto& a, const auto& b) {
-        CHashWriter hw1(SER_GETHASH, 0);
-        hw1 << quorumHash << a->proTxHash;
-        CHashWriter hw2(SER_GETHASH, 0);
-        hw2 << quorumHash << b->proTxHash;
-        return hw1.GetHash() < hw2.GetHash();
-    });
-    
-    if (members.size() > static_cast<size_t>(params.size)) {
-        members.resize(params.size);
     }
     
     // Create session
