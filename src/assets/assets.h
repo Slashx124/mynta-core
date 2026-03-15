@@ -9,6 +9,7 @@
 #include "amount.h"
 #include "tinyformat.h"
 #include "assettypes.h"
+#include "pubkey.h"
 #include "script/standard.h"
 
 #include <string>
