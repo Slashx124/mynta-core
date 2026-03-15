@@ -9,6 +9,7 @@
 #include "amount.h"
 #include "tinyformat.h"
 #include "assettypes.h"
+#include "script/standard.h"
 
 #include <string>
 #include <set>
@@ -58,7 +59,17 @@ class Coin;
 class CWallet;
 class CReserveKey;
 class CWalletTx;
-struct CAssetOutputEntry;
+struct CAssetOutputEntry
+{
+    txnouttype type;
+    std::string assetName;
+    CTxDestination destination;
+    CAmount nAmount = 0;
+    std::string message;
+    int64_t expireTime;
+    int vout;
+};
+
 class CCoinControl;
 struct CBlockAssetUndo;
 class COutput;

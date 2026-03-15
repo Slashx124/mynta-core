@@ -15,6 +15,7 @@
 #include "script/interpreter.h"
 #include "validation.h"
 #include <cmath>
+#include <utility>
 #include <base58.h>
 #include <tinyformat.h>
 
@@ -634,11 +635,11 @@ bool Consensus::CheckTxAssets(const CTransaction& tx, CValidationState& state, c
                     return state.DoS(100, false, REJECT_INVALID, "bad-txns-asset-inputs-overflow", false, "", tx.GetHash());
                 }
             } else {
-                totalInputs.insert(make_pair(data.assetName, data.nAmount));
+                totalInputs.insert(std::make_pair(data.assetName, data.nAmount));
             }
 
             if (AreMessagesDeployed()) {
-                mapAddresses.insert(make_pair(data.assetName,EncodeDestination(data.destination)));
+                mapAddresses.insert(std::make_pair(data.assetName, EncodeDestination(data.destination)));
             }
 
             if (IsAssetNameAnRestricted(data.assetName)) {
@@ -708,7 +709,7 @@ bool Consensus::CheckTxAssets(const CTransaction& tx, CValidationState& state, c
                     return state.DoS(100, false, REJECT_INVALID, "bad-txns-asset-outputs-overflow", false, "", tx.GetHash());
                 }
             } else {
-                totalOutputs.insert(make_pair(transfer.strName, transfer.nAmount));
+                totalOutputs.insert(std::make_pair(transfer.strName, transfer.nAmount));
             }
 
             if (!fRunningUnitTests) {

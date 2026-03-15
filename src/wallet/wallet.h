@@ -20,6 +20,7 @@
 #include "wallet/walletdb.h"
 #include "wallet/rpcwallet.h"
 #include "assets/assettypes.h"
+#include "assets/assets.h"
 
 #include <algorithm>
 #include <atomic>
@@ -191,16 +192,6 @@ struct COutputEntry
 };
 
 /** RVN START */
-struct CAssetOutputEntry
-{
-    txnouttype type;
-    std::string assetName;
-    CTxDestination destination;
-    CAmount nAmount = 0;
-    std::string message;
-    int64_t expireTime;
-    int vout;
-};
 /** RVN END */
 
 /** A transaction with a merkle branch linking it to the block chain. */
