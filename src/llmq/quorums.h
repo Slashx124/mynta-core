@@ -175,7 +175,31 @@ public:
     
 public:
     CRecoveredSig() = default;
-    
+    CRecoveredSig(const CRecoveredSig& o)
+        : llmqType(o.llmqType), quorumHash(o.quorumHash), id(o.id),
+          msgHash(o.msgHash), sig(o.sig), hash(), hashCached(false) {}
+    CRecoveredSig& operator=(const CRecoveredSig& o)
+    {
+        if (this != &o) {
+            llmqType = o.llmqType; quorumHash = o.quorumHash; id = o.id;
+            msgHash = o.msgHash; sig = o.sig;
+            hash = uint256(); hashCached.store(false, std::memory_order_relaxed);
+        }
+        return *this;
+    }
+    CRecoveredSig(CRecoveredSig&& o) noexcept
+        : llmqType(o.llmqType), quorumHash(std::move(o.quorumHash)), id(std::move(o.id)),
+          msgHash(std::move(o.msgHash)), sig(std::move(o.sig)), hash(), hashCached(false) {}
+    CRecoveredSig& operator=(CRecoveredSig&& o) noexcept
+    {
+        if (this != &o) {
+            llmqType = o.llmqType; quorumHash = std::move(o.quorumHash); id = std::move(o.id);
+            msgHash = std::move(o.msgHash); sig = std::move(o.sig);
+            hash = uint256(); hashCached.store(false, std::memory_order_relaxed);
+        }
+        return *this;
+    }
+
     uint256 GetHash() const;
     
     // Build the message hash for signing

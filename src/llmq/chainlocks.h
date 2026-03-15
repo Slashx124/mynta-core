@@ -127,6 +127,27 @@ public:
     CChainLockSig() = default;
     CChainLockSig(int _nHeight, const uint256& _blockHash)
         : nHeight(_nHeight), blockHash(_blockHash) {}
+    CChainLockSig(const CChainLockSig& o)
+        : nHeight(o.nHeight), blockHash(o.blockHash), sig(o.sig), hash(), hashCached(false) {}
+    CChainLockSig& operator=(const CChainLockSig& o)
+    {
+        if (this != &o) {
+            nHeight = o.nHeight; blockHash = o.blockHash; sig = o.sig;
+            hash = uint256(); hashCached.store(false, std::memory_order_relaxed);
+        }
+        return *this;
+    }
+    CChainLockSig(CChainLockSig&& o) noexcept
+        : nHeight(o.nHeight), blockHash(std::move(o.blockHash)), sig(std::move(o.sig)),
+          hash(), hashCached(false) {}
+    CChainLockSig& operator=(CChainLockSig&& o) noexcept
+    {
+        if (this != &o) {
+            nHeight = o.nHeight; blockHash = std::move(o.blockHash); sig = std::move(o.sig);
+            hash = uint256(); hashCached.store(false, std::memory_order_relaxed);
+        }
+        return *this;
+    }
     
     uint256 GetHash() const;
     

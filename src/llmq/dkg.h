@@ -94,7 +94,35 @@ public:
 
 public:
     CDKGContribution() = default;
-    
+    CDKGContribution(const CDKGContribution& o)
+        : quorumHash(o.quorumHash), proTxHash(o.proTxHash), memberIndex(o.memberIndex),
+          vvec(o.vvec), encryptedShares(o.encryptedShares), sig(o.sig),
+          hash(), hashCached(false) {}
+    CDKGContribution& operator=(const CDKGContribution& o)
+    {
+        if (this != &o) {
+            quorumHash = o.quorumHash; proTxHash = o.proTxHash; memberIndex = o.memberIndex;
+            vvec = o.vvec; encryptedShares = o.encryptedShares; sig = o.sig;
+            hash = uint256(); hashCached.store(false, std::memory_order_relaxed);
+        }
+        return *this;
+    }
+    CDKGContribution(CDKGContribution&& o) noexcept
+        : quorumHash(std::move(o.quorumHash)), proTxHash(std::move(o.proTxHash)),
+          memberIndex(o.memberIndex), vvec(std::move(o.vvec)),
+          encryptedShares(std::move(o.encryptedShares)), sig(std::move(o.sig)),
+          hash(), hashCached(false) {}
+    CDKGContribution& operator=(CDKGContribution&& o) noexcept
+    {
+        if (this != &o) {
+            quorumHash = std::move(o.quorumHash); proTxHash = std::move(o.proTxHash);
+            memberIndex = o.memberIndex; vvec = std::move(o.vvec);
+            encryptedShares = std::move(o.encryptedShares); sig = std::move(o.sig);
+            hash = uint256(); hashCached.store(false, std::memory_order_relaxed);
+        }
+        return *this;
+    }
+
     uint256 GetHash() const;
     uint256 GetSignHash() const;
     
@@ -255,7 +283,39 @@ public:
 
 public:
     CDKGFinalCommitment() = default;
-    
+    CDKGFinalCommitment(const CDKGFinalCommitment& o)
+        : quorumHash(o.quorumHash), signers(o.signers), validMembers(o.validMembers),
+          quorumPublicKey(o.quorumPublicKey), quorumVvec(o.quorumVvec),
+          membersSig(o.membersSig), hash(), hashCached(false) {}
+    CDKGFinalCommitment& operator=(const CDKGFinalCommitment& o)
+    {
+        if (this != &o) {
+            quorumHash = o.quorumHash; signers = o.signers; validMembers = o.validMembers;
+            quorumPublicKey = o.quorumPublicKey; quorumVvec = o.quorumVvec;
+            membersSig = o.membersSig;
+            hash = uint256(); hashCached.store(false, std::memory_order_relaxed);
+        }
+        return *this;
+    }
+    CDKGFinalCommitment(CDKGFinalCommitment&& o) noexcept
+        : quorumHash(std::move(o.quorumHash)), signers(std::move(o.signers)),
+          validMembers(std::move(o.validMembers)),
+          quorumPublicKey(std::move(o.quorumPublicKey)),
+          quorumVvec(std::move(o.quorumVvec)),
+          membersSig(std::move(o.membersSig)), hash(), hashCached(false) {}
+    CDKGFinalCommitment& operator=(CDKGFinalCommitment&& o) noexcept
+    {
+        if (this != &o) {
+            quorumHash = std::move(o.quorumHash); signers = std::move(o.signers);
+            validMembers = std::move(o.validMembers);
+            quorumPublicKey = std::move(o.quorumPublicKey);
+            quorumVvec = std::move(o.quorumVvec);
+            membersSig = std::move(o.membersSig);
+            hash = uint256(); hashCached.store(false, std::memory_order_relaxed);
+        }
+        return *this;
+    }
+
     uint256 GetHash() const;
     uint256 GetSignHash() const;
     

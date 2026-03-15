@@ -97,7 +97,31 @@ public:
     
 public:
     CInstantSendLock() = default;
-    
+    CInstantSendLock(const CInstantSendLock& o)
+        : inputs(o.inputs), txid(o.txid), quorumHash(o.quorumHash),
+          sig(o.sig), hash(), hashCached(false) {}
+    CInstantSendLock& operator=(const CInstantSendLock& o)
+    {
+        if (this != &o) {
+            inputs = o.inputs; txid = o.txid; quorumHash = o.quorumHash; sig = o.sig;
+            hash = uint256(); hashCached.store(false, std::memory_order_relaxed);
+        }
+        return *this;
+    }
+    CInstantSendLock(CInstantSendLock&& o) noexcept
+        : inputs(std::move(o.inputs)), txid(std::move(o.txid)),
+          quorumHash(std::move(o.quorumHash)), sig(std::move(o.sig)),
+          hash(), hashCached(false) {}
+    CInstantSendLock& operator=(CInstantSendLock&& o) noexcept
+    {
+        if (this != &o) {
+            inputs = std::move(o.inputs); txid = std::move(o.txid);
+            quorumHash = std::move(o.quorumHash); sig = std::move(o.sig);
+            hash = uint256(); hashCached.store(false, std::memory_order_relaxed);
+        }
+        return *this;
+    }
+
     uint256 GetHash() const;
     
     // Build the ID for signing (hash of inputs)
